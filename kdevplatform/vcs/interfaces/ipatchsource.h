@@ -49,6 +49,9 @@ class KDEVPLATFORMVCS_EXPORT IPatchSource : public QObject
         ///should re-compare the files or whatever needs to be done
         ///If the patch has changed, patchChanged needs to be emitted
         virtual void update() = 0;
+        ///change the number of lines of context the patch should show
+        ///virtual so it can be overridden, for instance to call update().
+        virtual void setContextLines(int contextLines) { m_contextLines = contextLines; }
 
         ///Name of the patch file
         virtual QUrl file() const = 0;
@@ -92,6 +95,8 @@ class KDEVPLATFORMVCS_EXPORT IPatchSource : public QObject
     Q_SIGNALS:
         ///Should be emitted whenever the patch has changed.
         void patchChanged();
+    protected:
+        int m_contextLines = -1;
 };
 
 class KDEVPLATFORMVCS_EXPORT IPatchReview

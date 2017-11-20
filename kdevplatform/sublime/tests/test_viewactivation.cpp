@@ -23,8 +23,9 @@
 
 #include <QListView>
 #include <QTextEdit>
-#include <QDockWidget>
 #include <QFocusEvent>
+#include <QDockWidget>
+#include <QTextBrowser>
 
 #include <sublime/view.h>
 #include <sublime/area.h>
@@ -32,6 +33,8 @@
 #include <sublime/mainwindow.h>
 #include <sublime/container.h>
 #include <sublime/tooldocument.h>
+#include <sublime/idealcontroller.h>
+#include <sublime/idealdockwidget.h>
 
 using namespace Sublime;
 
@@ -62,6 +65,7 @@ void TestViewActivation::init()
     doc2 = new ToolDocument(QStringLiteral("doc2"), controller, new SpecialWidgetFactory<QListView>(QStringLiteral("doc2")));
     doc3 = new ToolDocument(QStringLiteral("doc3"), controller, new SimpleToolWidgetFactory<QListView>(QStringLiteral("doc3")));
     doc4 = new ToolDocument(QStringLiteral("doc4"), controller, new SimpleToolWidgetFactory<QListView>(QStringLiteral("doc4")));
+    doc5 = new ToolDocument(QStringLiteral("doc5"), controller, new SimpleToolWidgetFactory<QTextBrowser>(QStringLiteral("doc5")));
 
     tool1 = new ToolDocument(QStringLiteral("tool1"), controller, new SimpleToolWidgetFactory<QListView>(QStringLiteral("tool1")));
     tool2 = new ToolDocument(QStringLiteral("tool2"), controller, new SimpleToolWidgetFactory<QTextEdit>(QStringLiteral("tool2")));
@@ -81,6 +85,8 @@ void TestViewActivation::init()
     area->addView(view231, view221, Qt::Horizontal);
     view241 = doc4->createView();
     area->addView(view241, view212, Qt::Vertical);
+    view251 = doc5->createView();
+    area->addView(view251, view212, Qt::Vertical);
     viewT11 = tool1->createView();
     area->addToolView(viewT11, Sublime::Bottom);
     viewT21 = tool2->createView();
@@ -176,6 +182,50 @@ void TestViewActivation::viewActivation()
     qApp->sendEvent(inner, new QFocusEvent(QEvent::FocusIn));
     QCOMPARE(mw->activeView(), view221);
     QCOMPARE(mw->activeToolView(), viewT31);
+}
+
+void TestViewActivation::idealDockWidgets()
+{
+    MainWindow* mw = new MainWindow(controller);
+    IdealController* ic = new IdealController(mw);
+    controller->addDefaultArea(area); // Q_ASSERT without this.
+    controller->addMainWindow(mw);
+
+    controller->showArea(area, mw);
+    //we should have an active view immediatelly after the area is shown
+    QCOMPARE(mw->activeView(), view211);
+
+    //add some widgets that are not in layout
+    QTextEdit *breaker = new QTextEdit(mw);
+    breaker->setObjectName(QStringLiteral("breaker"));
+    QTextEdit *toolBreaker = new QTextEdit(mw);
+    toolBreaker->setObjectName(QStringLiteral("toolBreaker"));
+
+    ic->addView(Qt::LeftDockWidgetArea, view251);
+    ic->showLeftDock(true);
+    IdealDockWidget *dock = ic->allDockWidgets().at(0);
+    dock->setWidget(toolBreaker);
+    mw->addDockWidget(Qt::LeftDockWidgetArea, dock);
+//     dock->setFloatsAsStandalone(true);
+    dock->setFloating(true);
+
+    //now post events to the widgets and see if mainwindow has the right active views
+    //activate view
+    qApp->sendEvent(view212->widget(), new QFocusEvent(QEvent::FocusIn));
+    QString failMsg = QStringLiteral("\nWas expecting %1 to be active but got %2").
+                      arg(view212->objectName(), mw->activeView()->objectName());
+    QVERIFY2(mw->activeView() == view212, failMsg.toLatin1().data());
+
+    //activate toolview and check that both view and toolview are active
+    qApp->sendEvent(viewT31->widget(), new QFocusEvent(QEvent::FocusIn));
+    QCOMPARE(mw->activeView(), view212);
+    QCOMPARE(mw->activeToolView(), viewT31);
+
+    //focus a dock not in the area
+    qApp->sendEvent(toolBreaker, new QFocusEvent(QEvent::FocusIn));
+    QCOMPARE(mw->activeView(), view212);
+    QCOMPARE(mw->activeToolView(), viewT31);
+
 }
 
 void TestViewActivation::activationInMultipleMainWindows()

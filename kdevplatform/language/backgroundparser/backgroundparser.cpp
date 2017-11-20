@@ -425,7 +425,11 @@ config.readEntry(entry, oldConfig.readEntry(entry, default))
         if (qEnvironmentVariableIsSet("KDEV_BACKGROUNDPARSER_MAXTHREADS")) {
             m_parser->setThreadCount(qgetenv("KDEV_BACKGROUNDPARSER_MAXTHREADS").toInt());
         } else {
-            m_parser->setThreadCount(BACKWARDS_COMPATIBLE_ENTRY("Number of Threads", QThread::idealThreadCount()));
+            int defThreads = QThread::idealThreadCount();
+            if (defThreads >= 4) {
+                defThreads /= 2;
+            }
+            m_parser->setThreadCount(BACKWARDS_COMPATIBLE_ENTRY("Number of Threads", defThreads));
         }
 
         resume();

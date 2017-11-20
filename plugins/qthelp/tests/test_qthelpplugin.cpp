@@ -58,7 +58,8 @@ void TestQtHelpPlugin::init()
 {
     m_plugin = new QtHelpPlugin(m_testCore, QVariantList());
     // write default config and read it
-    qtHelpWriteConfig(QStringList(), QStringList(), QStringList(), QStringList(), QString(), true);
+    ExternalViewerSettings extView;
+    qtHelpWriteConfig(QStringList(), QStringList(), QStringList(), QStringList(), QString(), true, extView);
     m_plugin->readConfig();
 }
 
@@ -82,7 +83,8 @@ void TestQtHelpPlugin::testDefaultValue()
 
 void TestQtHelpPlugin::testUnsetQtHelpDoc()
 {
-    qtHelpWriteConfig(QStringList(), QStringList(), QStringList(), QStringList(), QString(), false);
+    ExternalViewerSettings extView;
+    qtHelpWriteConfig(QStringList(), QStringList(), QStringList(), QStringList(), QString(), false, extView);
     m_plugin->readConfig();
 
     QCOMPARE(m_plugin->providers().size(), 0);
@@ -95,7 +97,8 @@ void TestQtHelpPlugin::testAddOneValidProvider()
     name << QStringLiteral("file1");
     icon << QStringLiteral("myIcon");
     ghns << QStringLiteral("0");
-    qtHelpWriteConfig(icon, name, path, ghns, QString(), true);
+    ExternalViewerSettings extView;
+    qtHelpWriteConfig(icon, name, path, ghns, QString(), true, extView);
     m_plugin->readConfig();
 
     QCOMPARE(m_plugin->qtHelpProviderLoaded().size(), 1);
@@ -111,7 +114,8 @@ void TestQtHelpPlugin::testAddTwoDifferentValidProvider()
     name << QStringLiteral("file1") << QStringLiteral("file2");
     icon << QStringLiteral("myIcon") << QStringLiteral("myIcon");
     ghns << QStringLiteral("0") << QStringLiteral("0");
-    qtHelpWriteConfig(icon, name, path, ghns, QString(), true);
+    ExternalViewerSettings extView;
+    qtHelpWriteConfig(icon, name, path, ghns, QString(), true, extView);
     m_plugin->readConfig();
 
     QCOMPARE(m_plugin->qtHelpProviderLoaded().size(), 2);
@@ -132,7 +136,8 @@ void TestQtHelpPlugin::testAddInvalidProvider()
     name << QStringLiteral("file1");
     icon << QStringLiteral("myIcon");
     ghns << QStringLiteral("0");
-    qtHelpWriteConfig(icon, name, path, ghns, QString(), true);
+    ExternalViewerSettings extView;
+    qtHelpWriteConfig(icon, name, path, ghns, QString(), true, extView);
     m_plugin->readConfig();
 
     QCOMPARE(m_plugin->qtHelpProviderLoaded().size(), 0);
@@ -145,7 +150,8 @@ void TestQtHelpPlugin::testAddTwiceSameProvider()
     name << QStringLiteral("file1") << QStringLiteral("file2");
     icon << QStringLiteral("myIcon") << QStringLiteral("myIcon");
     ghns << QStringLiteral("0") << QStringLiteral("0");
-    qtHelpWriteConfig(icon, name, path, ghns, QString(), true);
+    ExternalViewerSettings extView;
+    qtHelpWriteConfig(icon, name, path, ghns, QString(), true, extView);
     m_plugin->readConfig();
 
     QCOMPARE(m_plugin->qtHelpProviderLoaded().size(), 1);
@@ -158,7 +164,8 @@ void TestQtHelpPlugin::testRemoveOneProvider()
     name << QStringLiteral("file1") << QStringLiteral("file2");
     icon << QStringLiteral("myIcon") << QStringLiteral("myIcon");
     ghns << QStringLiteral("0") << QStringLiteral("0");
-    qtHelpWriteConfig(icon, name, path, ghns, QString(), true);
+    ExternalViewerSettings extView;
+    qtHelpWriteConfig(icon, name, path, ghns, QString(), true, extView);
     m_plugin->readConfig();
 
     QCOMPARE(m_plugin->qtHelpProviderLoaded().size(), 2);
@@ -168,7 +175,7 @@ void TestQtHelpPlugin::testRemoveOneProvider()
     name.removeAt(1);
     icon.removeAt(1);
     ghns.removeAt(1);
-    qtHelpWriteConfig(icon, name, path, ghns, QString(), true);
+    qtHelpWriteConfig(icon, name, path, ghns, QString(), true, extView);
     m_plugin->readConfig();
 
     QCOMPARE(m_plugin->qtHelpProviderLoaded().size(), 1);

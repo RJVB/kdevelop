@@ -94,8 +94,11 @@ CMakeFilesCompilationData importCommands(const Path& commandsFile)
         ret.includes = kTransform<Path::List>(result.paths, convert);
         ret.frameworkDirectories = kTransform<Path::List>(result.frameworkDirectories, convert);
         ret.defines = result.defines;
-        const Path path(rt->pathInHost(Path(entry[KEY_FILE].toString())));
-        qCDebug(CMAKE) << "entering..." << path << entry[KEY_FILE];
+        const auto entryFile = entry[KEY_FILE].toString();
+        const auto entryInfo = QFileInfo(entryFile);
+        const auto entryPath = Path(entryInfo.exists() ? entryInfo.canonicalFilePath() : entryFile);
+        const Path path(rt->pathInHost(entryPath));
+        qCDebug(CMAKE) << "entering..." << path << entryFile;
         data.files[path] = ret;
     }
 
@@ -142,7 +145,7 @@ void CMakeImportJsonJob::start()
         return;
     }
 
-    const Path currentBuildDir = CMake::currentBuildDir(m_project);
+    const Path currentBuildDir = CMake::currentCanonicalBuildDir(m_project);
     Q_ASSERT (!currentBuildDir.isEmpty());
 
     const Path targetsFilePath = CMake::targetDirectoriesFile(m_project);

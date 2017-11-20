@@ -37,6 +37,9 @@
 #include <QToolBar>
 #include <QVBoxLayout>
 
+#include "debug.h"
+#include <QCoreApplication>
+
 using namespace Sublime;
 
 IdealDockWidget::IdealDockWidget(IdealController *controller, Sublime::MainWindow *parent)
@@ -44,7 +47,9 @@ IdealDockWidget::IdealDockWidget(IdealController *controller, Sublime::MainWindo
       m_area(nullptr),
       m_view(nullptr),
       m_docking_area(Qt::NoDockWidgetArea),
-      m_controller(controller)
+      m_controller(controller),
+      m_floatingWidget(nullptr),
+      m_floatsAsStandalone(false)
 {
     setAutoFillBackground(true);
     setContextMenuPolicy(Qt::CustomContextMenu);
@@ -61,6 +66,12 @@ IdealDockWidget::IdealDockWidget(IdealController *controller, Sublime::MainWindo
     setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     // do not allow to move docks to the top dock area (no buttonbar there in our current UI)
     setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
+
+    connect(this, &QDockWidget::topLevelChanged, this, [this] (bool floating) {
+            if (floating && isVisible() && floatsAsStandalone()) {
+                QMetaObject::invokeMethod(this, "makeStandaloneWindow", Qt::QueuedConnection);
+            }
+        } );
 }
 
 IdealDockWidget::~IdealDockWidget()
@@ -85,9 +96,78 @@ Qt::DockWidgetArea IdealDockWidget::dockWidgetArea() const
 void IdealDockWidget::setDockWidgetArea(Qt::DockWidgetArea dockingArea)
 { m_docking_area = dockingArea; }
 
+void IdealDockWidget::setFloating(bool floating)
+{
+    if (!m_floatsAsStandalone) {
+        QDockWidget::setFloating(floating);
+    } else {
+        if (floating) {
+            makeStandaloneWindow();
+        } else {
+            reDockWidget(false);
+        }
+    }
+}
+
+void IdealDockWidget::setFloatsAsStandalone(bool standalone)
+{
+    m_floatsAsStandalone = standalone;
+}
+
+bool IdealDockWidget::floatsAsStandalone()
+{
+    return m_floatsAsStandalone;
+}
+
 void IdealDockWidget::slotRemove()
 {
-    m_area->removeToolView(m_view);
+    if (m_floatingWidget) {
+        setWidget(m_floatingWidget);
+        m_floatingWidget = nullptr;
+    }
+    if (m_area) {
+        m_area->removeToolView(m_view);
+    }
+}
+
+void IdealDockWidget::makeStandaloneWindow()
+{
+    if (!m_floatingWidget) {
+        if (!isFloating()) {
+            QDockWidget::setFloating(true);
+            m_area->raiseToolView(m_view);
+        }
+        if (auto w = widget()) {
+            // turn into top-level window
+            qCDebug(SUBLIME) << "reparenting" << this << "widget" << w << "away from" << w->parent();
+            m_floatingWidget = w;
+            w->setParent(nullptr);
+            w->setWindowFlags(Qt::Window);
+            w->show();
+            connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this, &IdealDockWidget::aboutToShutdown );
+            close();
+        }
+    }
+}
+
+void IdealDockWidget::reDockWidget(bool signalClose)
+{
+    if (m_floatingWidget) {
+        setWidget(m_floatingWidget);
+        m_floatingWidget = nullptr;
+    }
+    QDockWidget::setFloating(false);
+    if (signalClose) {
+        emit closeRequested();
+    }
+}
+
+void IdealDockWidget::aboutToShutdown()
+{
+    qCDebug(SUBLIME) << "Re-docking" << this << "before exit";
+    if (m_floatingWidget) {
+        reDockWidget(true);
+    }
 }
 
 void IdealDockWidget::contextMenuRequested(const QPoint &point)
@@ -118,13 +198,21 @@ void IdealDockWidget::contextMenuRequested(const QPoint &point)
     QAction *left = new QAction(i18nc("toolview position", "Left"), g);
     QAction *bottom = new QAction(i18nc("toolview position", "Bottom"), g);
     QAction *right = new QAction(i18nc("toolview position", "Right"), g);
-    QAction *detach = new QAction(i18nc("toolview position", "Detached"), g);
-
-    for (auto action : {left, bottom, right, detach}) {
-        positionMenu->addAction(action);
-        action->setCheckable(true);
+    QAction *detach = nullptr;
+    if (!floatsAsStandalone()) {
+        detach = new QAction(i18nc("toolview position", "Detached as floating window"), g);
     }
-    if (isFloating()) {
+    QAction *standalone = new QAction(i18nc("toolview position", "Detached as standalone window"), g);
+
+    for (auto action : {left, bottom, right, detach, standalone}) {
+        if (action) {
+            positionMenu->addAction(action);
+            action->setCheckable(true);
+        }
+    }
+    if (m_floatingWidget) {
+        standalone->setChecked(true);
+    } else if (isFloating() && detach) {
         detach->setChecked(true);
     } else if (m_docking_area == Qt::BottomDockWidgetArea)
         bottom->setChecked(true);
@@ -140,6 +228,7 @@ void IdealDockWidget::contextMenuRequested(const QPoint &point)
     setShortcut->setToolTip(i18n("Use this shortcut to trigger visibility of the toolview."));
 
     menu.addSeparator();
+
     QAction* remove = menu.addAction(QIcon::fromTheme(QStringLiteral("dialog-close")), i18n("Remove Toolview"));
 
     QAction* triggered = menu.exec(senderWidget->mapToGlobal(point));
@@ -176,13 +265,19 @@ void IdealDockWidget::contextMenuRequested(const QPoint &point)
 
             return;
         } else if ( triggered == detach ) {
-            setFloating(true);
-            m_area->raiseToolView(m_view);
+            if (!m_floatingWidget && !isFloating()) {
+                setFloating(true);
+                m_area->raiseToolView(m_view);
+            }
+            return;
+        } else if ( triggered == standalone ) {
+            // this will invalidate m_area
+            makeStandaloneWindow();
             return;
         }
 
         if (isFloating()) {
-            setFloating(false);
+            reDockWidget(false);
         }
 
         Sublime::Position pos;
@@ -195,11 +290,13 @@ void IdealDockWidget::contextMenuRequested(const QPoint &point)
         else
             return;
 
-        Area *area = m_area;
-        View *view = m_view;
-        /* This call will delete *this, so we no longer
-           can access member variables. */
-        m_area->moveToolView(m_view, pos);
-        area->raiseToolView(view);
+        if (m_area) {
+            Area *area = m_area;
+            View *view = m_view;
+            /* This call will delete *this, so we no longer
+               can access member variables. */
+            m_area->moveToolView(m_view, pos);
+            area->raiseToolView(view);
+        }
     }
 }

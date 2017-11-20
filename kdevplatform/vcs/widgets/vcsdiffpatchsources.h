@@ -48,6 +48,13 @@ public:
     virtual KDevelop::VcsDiff update() const = 0;
     virtual KDevelop::IBasicVersionControl* vcs() const = 0;
     virtual QUrl url() const = 0;
+    void setContextLines(int n)
+    {
+        m_contextLines = n;
+    }
+    int contextLines() { return m_contextLines; }
+protected:
+    int m_contextLines=-1;
 };
 
 class KDEVPLATFORMVCS_EXPORT VCSStandardDiffUpdater : public VCSDiffUpdater {

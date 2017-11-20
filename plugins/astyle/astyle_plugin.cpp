@@ -101,6 +101,9 @@ static SourceFormatterStyle::MimeList supportedMimeTypes()
         {QStringLiteral("text/x-csrc"), QStringLiteral("C")},
         {QStringLiteral("text/x-java"), QStringLiteral("Java")},
         {QStringLiteral("text/x-csharp"), QStringLiteral("C#")},
+        {QStringLiteral("text/x-objchdr"), QStringLiteral("ObjC")},
+        {QStringLiteral("text/x-objcsrc"), QStringLiteral("ObjC")},
+        {QStringLiteral("text/x-objc++src"), QStringLiteral("ObjC++")},
     };
 }
 

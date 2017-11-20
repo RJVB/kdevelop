@@ -1,5 +1,10 @@
 add_definitions(-DTRANSLATION_DOMAIN=\"kdevqthelp\")
 
+if(KDEVELOP_USE_QTEXTBROWSER)
+    message(STATUS "QtHelp plugin will be built for rendering using QTextBrowser")
+    add_definitions(-DUSE_QTEXTBROWSER)
+endif()
+
 ecm_qt_declare_logging_category(kdevqthelp_LOG_SRCS
     HEADER debug.h
     IDENTIFIER QTHELP
@@ -10,12 +15,18 @@ set(kdevqthelp_SRCS
     qthelpproviderabstract.cpp
     qthelpprovider.cpp
     qthelpdocumentation.cpp
+    qthelpexternalassistant.cpp
     qthelpqtdoc.cpp
     qthelp_config_shared.cpp
     qthelpconfig.cpp # Configuration module for QtHelp plugin
     qthelpnetwork.cpp
     ${kdevqthelp_LOG_SRCS}
 )
+if(APPLE)
+    set(kdevqthelp_SRCS ${kdevqthelp_SRCS}
+        qthelpexternalassistant_mac.mm
+    )
+endif()
 
 ki18n_wrap_ui(kdevqthelp_SRCS
     qthelpconfig.ui
@@ -27,6 +38,9 @@ kdevplatform_add_plugin(kdevqthelp JSON kdevqthelp.json SOURCES ${kdevqthelp_SRC
 target_link_libraries(kdevqthelp
     KF5::KCMUtils KF5::I18n KF5::KIOWidgets KF5::TextEditor KF5::IconThemes Qt5::Help KF5::NewStuff
     KDev::Language KDev::Documentation KDev::Interfaces)
+if(APPLE)
+    target_link_libraries(kdevqthelp "-framework AppKit")
+endif()
 
 if(BUILD_TESTING)
     add_subdirectory(tests)

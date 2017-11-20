@@ -35,15 +35,33 @@ static const int lineLenLimit = 72;
 void GitMessageHighlighter::applyErrorFormat(GitMessageHighlighter* text, bool warning, const QString& tooltip, int startPos, int endPos)
 {
     QTextCharFormat format;
-    format.setFontUnderline(true);
-    format.setUnderlineStyle(QTextCharFormat::SpellCheckUnderline);
-    format.setUnderlineColor(warning ? Qt::yellow : Qt::red);
+    format.setFontLetterSpacing(125);
+    if (!warning) {
+        format.setFontItalic(true);
+    } else {
+        // make the 1st character stand out too
+        // (letterspacing is applied *after* the startPos character)
+        if (startPos > 0) {
+            startPos -= 1;
+        }
+    }
     format.setToolTip(tooltip);
     text->setFormat(startPos, endPos, format);
 }
 
 GitMessageHighlighter::GitMessageHighlighter(QTextEdit* parent): Sonnet::Highlighter(parent)
 {
+    if (parent) {
+        parent->setToolTip(i18n("Suggested commit format: a summary line of about %1 characters maximum,\n"
+            "an empty line, and optional details with a max. line length of %2 characters.",
+            summarySoftLimit, lineLenLimit));
+        parent->setPlaceholderText(QString(summarySoftLimit, QChar('_'))
+            + i18n("\n(empty line)")
+            + QStringLiteral("\n") + QString(lineLenLimit, QChar('_'))
+            + QStringLiteral("\n") + QString(lineLenLimit, QChar('_'))
+            + QStringLiteral("\n") + QString(lineLenLimit, QChar('_'))
+            + QStringLiteral("\n") + QString(lineLenLimit, QChar('_')));
+    }
 }
 
 GitMessageHighlighter::~GitMessageHighlighter()
@@ -77,7 +95,7 @@ void GitMessageHighlighter::highlightBlock(const QString& text)
                     applyErrorFormat(this,
                         lineLength <= summaryHardLimit,
                         i18n("Try to keep summary length below %1 characters.", summarySoftLimit),
-                        startPos, endPos
+                        startPos+summarySoftLimit, endPos
                     );
                 } else {
                     for(int i=startPos; i<endPos; i++) {

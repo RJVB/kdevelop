@@ -14,7 +14,16 @@
    <locale language="English" country="UnitedStates"/>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_2">
-   <property name="margin">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
     <number>0</number>
    </property>
    <item>
@@ -48,14 +57,14 @@
        </widget>
       </item>
       <item row="1" column="1">
-       <widget class="KUrlRequester" name="qchSearchDir" native="true"/>
+       <widget class="KUrlRequester" name="qchSearchDir"/>
       </item>
       <item row="2" column="0" colspan="2">
-       <widget class="KMessageWidget" name="messageAvailabilityQtDocs" native="true">
+       <widget class="KMessageWidget" name="messageAvailabilityQtDocs">
         <property name="enabled">
          <bool>true</bool>
         </property>
-        <property name="text" stdset="0">
+        <property name="text">
          <string/>
         </property>
        </widget>
@@ -165,6 +174,48 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="boxAutoLoad2">
+     <layout class="QFormLayout" name="formLayout2">
+      <property name="fieldGrowthPolicy">
+       <enum>QFormLayout::ExpandingFieldsGrow</enum>
+      </property>
+      <property name="formAlignment">
+       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+      </property>
+      <property name="topMargin">
+       <number>3</number>
+      </property>
+      <property name="bottomMargin">
+       <number>3</number>
+      </property>
+      <item row="2" column="1">
+       <widget class="KUrlRequester" name="externalViewerExecutable">
+        <property name="mode">
+         <set>KFile::ExistingOnly|KFile::File|KFile::LocalOnly</set>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QCheckBox" name="externalViewerCheckBox">
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="labelExternalViewer">
+        <property name="text">
+         <string>Use &amp;external viewer:</string>
+        </property>
+        <property name="buddy">
+         <cstring>externalViewerCheckBox</cstring>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <spacer name="verticalSpacer">
      <property name="orientation">
       <enum>Qt::Vertical</enum>
@@ -181,15 +232,15 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>KMessageWidget</class>
-   <extends>QFrame</extends>
-   <header location="global">kmessagewidget.h</header>
-  </customwidget>
-  <customwidget>
    <class>KUrlRequester</class>
    <extends>QWidget</extends>
-   <header location="global">kurlrequester.h</header>
+   <header>kurlrequester.h</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>KMessageWidget</class>
+   <extends>QFrame</extends>
+   <header>kmessagewidget.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

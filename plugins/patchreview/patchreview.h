@@ -99,6 +99,7 @@ public Q_SLOTS :
     void highlightPatch();
     void updateKompareModel();
     void forceUpdate();
+    void forceUpdateWithContext(int contextLines);
     void areaChanged(Sublime::Area* area);
     void executeFileReviewAction();
 
@@ -134,6 +135,7 @@ private:
     uint m_depth = 0; // depth of the patch represented by m_modelList
     typedef QMap< QUrl, QPointer< PatchHighlighter > > HighlightMap;
     HighlightMap m_highlighters;
+    bool m_active;
 
     friend class PatchReviewToolView; // to access slot exporterSelected();
 };

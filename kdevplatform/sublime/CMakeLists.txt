@@ -26,6 +26,8 @@ set(sublime_LIB_SRCS
     idealtoolbutton.cpp
     idealdockwidget.cpp
     idealbuttonbarwidget.cpp
+
+    kwidgetstyleselector.cpp
 )
 ecm_qt_declare_logging_category(sublime_LIB_SRCS
     HEADER debug.h

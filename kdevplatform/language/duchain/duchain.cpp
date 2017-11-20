@@ -710,7 +710,7 @@ public:
       //Here we wait for all parsing-threads to stop their processing
       foreach(const auto language, languages) {
         if (lockFlag == TryLock) {
-          if (!language->parseLock()->tryLockForWrite()) {
+          if (!language->parseLock() || !language->parseLock()->tryLockForWrite()) {
             qCDebug(LANGUAGE) << "Aborting cleanup because language plugin is still parsing:" << language->name();
             // some language is still parsing, don't interfere with the cleanup
             foreach(auto* lock, locked) {
@@ -1565,10 +1565,15 @@ static void finalCleanup()
   qCDebug(LANGUAGE) << "doing final cleanup";
 
   int cleaned = 0;
+  int passes = 0;
   while((cleaned = globalItemRepositoryRegistry().finalCleanup())) {
+    passes += 1;
     qCDebug(LANGUAGE) << "cleaned" << cleaned << "B";
     if(cleaned < 1000) {
       qCDebug(LANGUAGE) << "cleaned enough";
+      break;
+    } else if (passes >= 100) {
+      qCWarning(LANGUAGE) << "cleaned" << passes << "passes, last was" << cleaned << "B; that's enough";
       break;
     }
   }

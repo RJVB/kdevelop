@@ -1,3 +1,4 @@
+#define TIME_IMPORT_JOB
 /***************************************************************************
  *   This file is part of KDevelop                                         *
  *   Copyright 2010-2012 Milian Wolff <mail@milianw.de>                    *
@@ -41,6 +42,7 @@
 #include <serialization/indexedstring.h>
 
 #include "projectfiltermanager.h"
+#include "projectwatcher.h"
 #include "debug.h"
 
 #define ifDebug(x)
@@ -89,7 +91,7 @@ public:
                      const KIO::UDSEntryList& entries);
 
     void deleted(const QString &path);
-    void created(const QString &path);
+    void dirty(const QString &path);
 
     void projectClosing(IProject* project);
     void jobFinished(KJob* job);
@@ -103,7 +105,7 @@ public:
 
     void removeFolder(ProjectFolderItem* folder);
 
-    QHash<IProject*, KDirWatch*> m_watchers;
+    QHash<IProject*, ProjectWatcher*> m_watchers;
     QHash<IProject*, QList<FileManagerListJob*> > m_projectJobs;
     QVector<QString> m_stoppedFolders;
     ProjectFilterManager m_filters;
@@ -129,7 +131,7 @@ void AbstractFileManagerPluginPrivate::projectClosing(IProject* project)
     delete m_watchers.take(project);
 #ifdef TIME_IMPORT_JOB
     if (timer.isValid()) {
-        qCDebug(FILEMANAGER) << "Deleting dir watcher took" << timer.elapsed() / 1000.0 << "seconds for project" << project->name();
+        qCInfo(FILEMANAGER) << "Deleting dir watcher took" << timer.elapsed() / 1000.0 << "seconds for project" << project->name();
     }
 #endif
     m_filters.remove(project);
@@ -137,6 +139,7 @@ void AbstractFileManagerPluginPrivate::projectClosing(IProject* project)
 
 KIO::Job* AbstractFileManagerPluginPrivate::eventuallyReadFolder(ProjectFolderItem* item)
 {
+    ProjectWatcher* watcher = m_watchers.value( item->project(), nullptr );
     FileManagerListJob* listJob = new FileManagerListJob( item );
     m_projectJobs[ item->project() ] << listJob;
     qCDebug(FILEMANAGER) << "adding job" << listJob << item << item->path() << "for project" << item->project();
@@ -147,6 +150,9 @@ KIO::Job* AbstractFileManagerPluginPrivate::eventuallyReadFolder(ProjectFolderIt
     q->connect( listJob, &FileManagerListJob::entries,
                 q, [&] (FileManagerListJob* job, ProjectFolderItem* baseItem, const KIO::UDSEntryList& entries) {
                     addJobItems(job, baseItem, entries); } );
+    q->connect( listJob, &FileManagerListJob::watchDir,
+                q, [item, watcher] (const QString& path) {
+                    watcher->addDir(path); }/*, Qt::QueuedConnection*/ );
 
     return listJob;
 }
@@ -257,9 +263,9 @@ void AbstractFileManagerPluginPrivate::addJobItems(FileManagerListJob* job,
     }
 }
 
-void AbstractFileManagerPluginPrivate::created(const QString& path_)
+void AbstractFileManagerPluginPrivate::dirty(const QString& path_)
 {
-    qCDebug(FILEMANAGER) << "created:" << path_;
+    qCDebug(FILEMANAGER) << "dirty:" << path_;
     QFileInfo info(path_);
 
     ///FIXME: share memory with parent
@@ -267,7 +273,7 @@ void AbstractFileManagerPluginPrivate::created(const QString& path_)
     const IndexedString indexedPath(path.pathOrUrl());
     const IndexedString indexedParent(path.parent().pathOrUrl());
 
-    QHashIterator<IProject*, KDirWatch*> it(m_watchers);
+    QHashIterator<IProject*, ProjectWatcher*> it(m_watchers);
     while (it.hasNext()) {
         const auto p = it.next().key();
         if ( !p->projectItem()->model() ) {
@@ -295,21 +301,6 @@ void AbstractFileManagerPluginPrivate::created(const QString& path_)
             // also gets triggered for kate's backup files
             continue;
         }
-        foreach ( ProjectFolderItem* parentItem, p->foldersForPath(indexedParent) ) {
-            if ( info.isDir() ) {
-                ProjectFolderItem* folder = q->createFolderItem( p, path, parentItem );
-                if (folder) {
-                    emit q->folderAdded( folder );
-                    auto job = eventuallyReadFolder( folder );
-                    job->start();
-                }
-            } else {
-                ProjectFileItem* file = q->createFileItem( p, path, parentItem );
-                if (file) {
-                    emit q->fileAdded( file );
-                }
-            }
-        }
     }
 }
 
@@ -330,7 +321,7 @@ void AbstractFileManagerPluginPrivate::deleted(const QString& path_)
     const Path path(QUrl::fromLocalFile(path_));
     const IndexedString indexed(path.pathOrUrl());
 
-    QHashIterator<IProject*, KDirWatch*> it(m_watchers);
+    QHashIterator<IProject*, ProjectWatcher*> it(m_watchers);
     while (it.hasNext()) {
         const auto p = it.next().key();
         if (path == p->path()) {
@@ -446,6 +437,11 @@ void AbstractFileManagerPluginPrivate::removeFolder(ProjectFolderItem* folder)
             job->removeSubDir(folder);
         }
     }
+    if (folder->path().isLocalFile()) {
+        ProjectWatcher* watcher = m_watchers.value(folder->project(), nullptr);
+        Q_ASSERT(watcher);
+        watcher->removeDir(folder->path().toLocalFile());
+    }
     folder->parent()->removeRow( folder->row() );
 }
 
@@ -487,14 +483,13 @@ ProjectFolderItem *AbstractFileManagerPlugin::import( IProject *project )
 
     ///TODO: check if this works for remote files when something gets changed through another KDE app
     if ( project->path().isLocalFile() ) {
-        auto watcher = new KDirWatch( project );
+        auto watcher = new ProjectWatcher(project, &d->m_filters);
 
-        // set up the signal handling
-        connect(watcher, &KDirWatch::created,
-                this, [&] (const QString& path_) { d->created(path_); });
+        // set up the signal handling; feeding the dirwatcher is handled by FileManagerListJob.
+        connect(watcher, &KDirWatch::dirty,
+                this, [&] (const QString& path_) { d->dirty(path_); });
         connect(watcher, &KDirWatch::deleted,
                 this, [&] (const QString& path_) { d->deleted(path_); });
-        watcher->addDir(project->path().toLocalFile(), KDirWatch::WatchSubDirs | KDirWatch:: WatchFiles );
         d->m_watchers[project] = watcher;
     }
 

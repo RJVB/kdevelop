@@ -39,6 +39,8 @@
 #include "idealdockwidget.h"
 #include "idealbuttonbarwidget.h"
 
+#include <QDebug>
+
 using namespace Sublime;
 
 IdealController::IdealController(Sublime::MainWindow* mainWindow):
@@ -149,7 +151,14 @@ void IdealController::dockLocationChanged(Qt::DockWidgetArea area)
 {
     IdealDockWidget *dock = qobject_cast<IdealDockWidget*>(sender());
     View *view = dock->view();
-    QAction* action = m_view_to_action.value(view);
+    QAction* action = nullptr;
+    if (m_view_to_action.contains(view)) {
+        action = m_view_to_action.value(view);
+    }
+    if (!action) {
+        qCritical() << Q_FUNC_INFO << "View" << view << "has no known hide/shown action";
+        return;
+    }
 
     if (dock->dockWidgetArea() == area) {
         // this event can happen even when dock changes its location within the same area
@@ -239,8 +248,15 @@ void IdealController::raiseView(View* view, RaiseMode mode)
     ///       for toolviews of the same type.
     mode = HideOtherViews;
 
-    QAction* action = m_view_to_action.value(view);
+    QAction* action = nullptr;
+    if (m_view_to_action.contains(view)) {
+        action = m_view_to_action.value(view);
+    }
     Q_ASSERT(action);
+    if (!action) {
+        qCritical() << Q_FUNC_INFO << "View" << view << "has no known hide/shown action";
+        return;
+    }
 
     QWidget *focusWidget = m_mainWindow->focusWidget();
 
@@ -296,7 +312,7 @@ QWidget* IdealController::statusBarLocation() const
 
 QAction* IdealController::actionForView(View* view) const
 {
-    return m_view_to_action.value(view);
+    return m_view_to_action.contains(view) ? m_view_to_action.value(view) : nullptr;
 }
 
 void IdealController::setShowDockStatus(Qt::DockWidgetArea area, bool checked)
@@ -325,8 +341,14 @@ QAction* IdealController::actionForArea(Qt::DockWidgetArea area) const
 
 void IdealController::removeView(View* view, bool nondestructive)
 {
-    Q_ASSERT(m_view_to_action.contains(view));
-    QAction* action = m_view_to_action.value(view);
+    QAction* action = nullptr;
+    if (m_view_to_action.contains(view)) {
+        action = m_view_to_action.value(view);
+    }
+    if (!action) {
+        qCritical() << Q_FUNC_INFO << "View" << view << "has no known hide/shown action";
+        return;
+    }
 
     QWidget *viewParent = view->widget()->parentWidget();
     IdealDockWidget *dock = qobject_cast<IdealDockWidget *>(viewParent);

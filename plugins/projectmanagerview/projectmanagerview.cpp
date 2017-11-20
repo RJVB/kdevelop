@@ -144,25 +144,34 @@ ProjectManagerView::ProjectManagerView( ProjectManagerViewPlugin* plugin, QWidge
     // Need to set this to get horizontal scrollbar. Also needs to be done after
     // the setModel call
     m_ui->projectTreeView->header()->setSectionResizeMode( QHeaderView::ResizeToContents );
+    m_ui->projectTreeView->header()->setStretchLastSection(false);
 }
 
 bool ProjectManagerView::eventFilter(QObject* obj, QEvent* event)
 {
     if (obj == m_ui->projectTreeView) {
-        if (event->type() == QEvent::KeyRelease) {
-            QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
-            if (keyEvent->key() == Qt::Key_Delete && keyEvent->modifiers() == Qt::NoModifier) {
-                m_plugin->removeItems(selectedItems());
-                return true;
-            } else if (keyEvent->key() == Qt::Key_F2 && keyEvent->modifiers() == Qt::NoModifier) {
-                m_plugin->renameItems(selectedItems());
-                return true;
-            } else if (keyEvent->key() == Qt::Key_C && keyEvent->modifiers() == Qt::ControlModifier) {
-                m_plugin->copyFromContextMenu();
-                return true;
-            } else if (keyEvent->key() == Qt::Key_V && keyEvent->modifiers() == Qt::ControlModifier) {
-                m_plugin->pasteFromContextMenu();
-                return true;
+        switch (event->type()) {
+            case QEvent::KeyRelease: {
+                QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+                if (keyEvent->key() == Qt:: Key_Backspace && keyEvent->modifiers() == Qt::ControlModifier) {
+                    m_plugin->removeItems(selectedItems());
+                    return true;
+                }
+                break;
+            }
+            case QEvent::KeyPress: {
+                QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+                if (keyEvent->key() == Qt::Key_F2 && keyEvent->modifiers() == Qt::NoModifier) {
+                    m_plugin->renameItems(selectedItems());
+                    return true;
+                } else if (keyEvent->key() == Qt::Key_C && keyEvent->modifiers() == Qt::ControlModifier) {
+                    m_plugin->copyFromContextMenu();
+                    return true;
+                } else if (keyEvent->key() == Qt::Key_V && keyEvent->modifiers() == Qt::ControlModifier) {
+                    m_plugin->pasteFromContextMenu();
+                    return true;
+                }
+                break;
             }
         }
     }

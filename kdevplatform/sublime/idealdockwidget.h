@@ -25,9 +25,10 @@
 
 #include <QDockWidget>
 #include "idealcontroller.h"
+#include "sublimeexport.h"
 
 namespace Sublime {
-class IdealDockWidget : public QDockWidget
+class KDEVPLATFORMSUBLIME_EXPORT IdealDockWidget : public QDockWidget
 {
     Q_OBJECT
 
@@ -44,6 +45,22 @@ public:
     Qt::DockWidgetArea dockWidgetArea() const;
     void setDockWidgetArea(Qt::DockWidgetArea dockingArea);
 
+    /**
+     * @brief overloads QDockWidget::setFloating to provide support
+     * for floating windows that behave like regular standalone windows.
+     */
+    void setFloating(bool floating);
+    /**
+     * @brief controls whether dock widgets are detached (floated)
+     * as regular @p standalone windows or as tool windows (Qt::Tool)
+     */
+    void setFloatsAsStandalone(bool standalone);
+    /**
+     * @brief returns true if floating (detached) windows behave as standalone
+     * (regular) windows instead of Qt's standard tool windows
+     */
+    bool floatsAsStandalone();
+
 public Q_SLOTS:
     /// The IdealToolButton also connects to this slot to show the same context menu.
     void contextMenuRequested(const QPoint &point);
@@ -53,13 +70,23 @@ Q_SIGNALS:
 
 private Q_SLOTS:
     void slotRemove();
+    /**
+     * @brief re-attaches views that have been set to float as standalone windows
+     * when the application is about to shutdown.
+     */
+    void aboutToShutdown();
 
 private:
+    Q_INVOKABLE void makeStandaloneWindow();
+    void reDockWidget(bool signalClose);
+
     Qt::Orientation m_orientation;
     Area *m_area;
     View *m_view;
     Qt::DockWidgetArea m_docking_area;
     IdealController *m_controller;
+    QWidget *m_floatingWidget;
+    bool m_floatsAsStandalone;
 };
 
 }

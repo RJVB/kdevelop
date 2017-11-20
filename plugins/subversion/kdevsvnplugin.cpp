@@ -241,6 +241,7 @@ KDevelop::VcsJob* KDevSvnPlugin::diff2(const KDevelop::VcsLocation& src,
                                        KDevelop::VcsDiff::Type diffType,
                                        KDevelop::IBasicVersionControl::RecursionMode recurse)
 {
+    // TODO: support custom context lines in SvnDiffJob
     SvnDiffJob* job = new SvnDiffJob(this);
     job->setSource(src);
     job->setDestination(dst);

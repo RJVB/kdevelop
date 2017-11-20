@@ -222,18 +222,20 @@ QList< IDocumentationProvider* > DocumentationController::documentationProviders
 
 void KDevelop::DocumentationController::showDocumentation(const IDocumentation::Ptr& doc)
 {
-    QWidget* w = ICore::self()->uiController()->findToolView(i18n("Documentation"), m_factory, KDevelop::IUiController::CreateAndRaise);
-    if(!w) {
-        qCWarning(SHELL) << "Could not add documentation toolview";
-        return;
-    }
+    if (!doc->viewInExternalBrowser()) {
+        QWidget* w = ICore::self()->uiController()->findToolView(i18n("Documentation"), m_factory, KDevelop::IUiController::CreateAndRaise);
+        if(!w) {
+            qCWarning(SHELL) << "Could not add documentation toolview";
+            return;
+        }
 
-    DocumentationView* view = dynamic_cast<DocumentationView*>(w);
-    if( !view ) {
-        qCWarning(SHELL) << "Could not cast toolview" << w << "to DocumentationView class!";
-        return;
+        DocumentationView* view = dynamic_cast<DocumentationView*>(w);
+        if( !view ) {
+            qCWarning(SHELL) << "Could not cast toolview" << w << "to DocumentationView class!";
+            return;
+        }
+        view->showDocumentation(doc);
     }
-    view->showDocumentation(doc);
 }
 
 void DocumentationController::changedDocumentationProviders()

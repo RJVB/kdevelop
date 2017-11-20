@@ -29,6 +29,7 @@
 #include <QHeaderView>
 #include <QMenu>
 #include <QPainter>
+#include <QScrollBar>
 
 #include <KConfigGroup>
 #include <KLocalizedString>
@@ -114,6 +115,9 @@ void popupContextMenu_appendActions(QMenu& menu, const QList<QAction*>& actions)
 
 ProjectTreeView::ProjectTreeView( QWidget *parent )
         : QTreeView( parent ), m_previousSelection ( nullptr )
+#ifdef Q_OS_MACOS
+        , m_isCocoa(QGuiApplication::platformName() == QStringLiteral("cocoa"))
+#endif
 {
     header()->hide();
 
@@ -130,6 +134,8 @@ ProjectTreeView::ProjectTreeView( QWidget *parent )
     setAutoExpandDelay(300);
     setItemDelegate(new ProjectModelItemDelegate(this));
 
+    setTextElideMode(Qt::ElideNone);
+
     connect( this, &ProjectTreeView::customContextMenuRequested, this, &ProjectTreeView::popupContextMenu );
     connect( this, &ProjectTreeView::activated, this, &ProjectTreeView::slotActivated );
 
@@ -139,6 +145,10 @@ ProjectTreeView::ProjectTreeView( QWidget *parent )
              this, &ProjectTreeView::restoreState );
     connect( ICore::self()->projectController(), &IProjectController::projectClosed,
              this, &ProjectTreeView::projectClosed );
+
+    // install the event filter that will filter out the horizontal component
+    // from scrolling in response to QWheelEvents (i.e. touch input)
+    viewport()->installEventFilter(this);
 }
 
 ProjectTreeView::~ProjectTreeView()
@@ -508,6 +518,43 @@ void ProjectTreeView::keyPressEvent(QKeyEvent* event)
     }
     else
         QTreeView::keyPressEvent(event);
+}
+
+void ProjectTreeView::resizeEvent(QResizeEvent* event)
+{
+    header()->setMinimumSectionSize(viewport()->width());
+    QTreeView::resizeEvent(event);
+}
+
+bool ProjectTreeView::eventFilter(QObject* object, QEvent* event)
+{
+    switch (event->type()) {
+        case QEvent::Wheel: {
+            QWheelEvent *e = static_cast<QWheelEvent*>(event);
+            if ((e->pixelDelta().x() !=0 || e->angleDelta().x()!= 0
+                || e->orientation() == Qt::Orientation::Horizontal)
+#ifdef Q_OS_MACOS
+                // Cocoa: allow horizontal scrolling controlled by a physical mouse wheel
+                && (!m_isCocoa || e->source() != Qt::MouseEventNotSynthesized)
+#endif
+            ){
+                QPoint pixelDelta(e->pixelDelta()), angleDelta(e->angleDelta());
+                pixelDelta.setX(0);
+                angleDelta.setX(0);
+                // discard the original event
+                e->ignore();
+                if (!pixelDelta.isNull() || !angleDelta.isNull()) {
+                    QWheelEvent filtered(e->posF(), e->globalPosF(), pixelDelta, angleDelta,
+                        e->delta(), Qt::Orientation::Vertical, e->buttons(),
+                        e->modifiers(), e->phase(), Qt::MouseEventSynthesizedByApplication, e->inverted());
+                    QCoreApplication::sendEvent(object, &filtered);
+                }
+                return true;
+            }
+            break;
+        }
+    }
+    return QTreeView::eventFilter(object, event);
 }
 
 void ProjectTreeView::drawBranches(QPainter* painter, const QRect& rect, const QModelIndex& index) const

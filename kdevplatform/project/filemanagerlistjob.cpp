@@ -95,6 +95,8 @@ void FileManagerListJob::startNextJob()
             if (m_aborted) {
                 return;
             }
+            // signal that this directory has to be watched
+            emit watchDir(path.toLocalFile());
             KIO::UDSEntryList results;
             std::transform(entries.begin(), entries.end(), std::back_inserter(results), [] (const QFileInfo& info) -> KIO::UDSEntry {
                 KIO::UDSEntry entry;

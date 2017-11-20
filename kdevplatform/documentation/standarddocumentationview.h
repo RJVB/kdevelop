@@ -59,6 +59,35 @@ public:
     void setOverrideCss(const QUrl &url);
 
     void load(const QUrl &url);
+    /**
+     * @brief delegate method for the QTextBrowser::loadResource(type,url)
+     * overload of the QTextBrowser backend. Override this method if your
+     * plugin can handle URLs that QTextBrowser cannot handle itself.
+     *
+     * @param type the QTextDocument::ResourceType type of the address to load
+     * @param url the address to be loaded; can be rewritten (e.g. with a resolved URL)
+     * @param content return variable for the loaded content. @p content is
+     * guaranteed to be invalid upon entry.
+     * 
+     * The function should return true if content was loaded successfully.
+     */
+    virtual bool loadResource(int type, QUrl& url, QVariant& content);
+
+#ifdef USE_QTEXTBROWSER
+    /**
+     * @brief load a page with the given content
+     * 
+     * @param url the address with a scheme QTextBrowser doesn't support
+     * @param content content that QTextBrowser cannot obtain itself.
+     * 
+     * Url and content are cached internally.
+     */
+    void load(const QUrl &url, const QByteArray& content);
+    /**
+     * @brief restore the cached url and content information
+     */
+    void restore();
+#endif
     void setHtml(const QString &html);
     void setNetworkAccessManager(QNetworkAccessManager* manager);
 
@@ -67,7 +96,17 @@ public:
      */
     void setDelegateLinks(bool delegate);
 
-    QMenu* createStandardContextMenu();
+    virtual QMenu* createStandardContextMenu(const QPoint& pos = QPoint());
+
+    /**
+     * is @param url one using a supported scheme?
+     */
+    static bool isUrlSchemeSupported(const QUrl& url);
+
+    /**
+     * @brief returns the underlying view widget
+     */
+    QWidget* view() const;
 
 Q_SIGNALS:
     void linkClicked(const QUrl &link);

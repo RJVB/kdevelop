@@ -392,11 +392,14 @@ VcsJob* GitPlugin::diff(const QUrl& fileOrDirectory, const KDevelop::VcsRevision
 
     DVcsJob* job = new GitJob(dotGitDirectory(fileOrDirectory), this, KDevelop::OutputJob::Silent);
     job->setType(VcsJob::Diff);
-    *job << "git" << "diff" << "--no-color" << "--no-ext-diff";
+    *job << "git" << "diff" << "--no-color" << "--no-ext-diff" << "--full-index";
     if (!usePrefix()) {
         // KDE's ReviewBoard now requires p1 patchfiles, so `git diff --no-prefix` to generate p0 patches
         // has become optional.
         *job << "--no-prefix";
+    }
+    if (m_contextLines > 0) {
+        *job << QStringLiteral("-U%1").arg(m_contextLines);
     }
     if (dstRevision.revisionType() == VcsRevision::Special &&
          dstRevision.specialType() == VcsRevision::Working) {
@@ -418,6 +421,7 @@ VcsJob* GitPlugin::diff(const QUrl& fileOrDirectory, const KDevelop::VcsRevision
     } else {
         *job << preventRecursion(QList<QUrl>() << fileOrDirectory);
     }
+    qWarning() << "git diff job:" << job->dvcsCommand();
 
     connect(job, &DVcsJob::readyForParsing, this, &GitPlugin::parseGitDiffOutput);
     return job;

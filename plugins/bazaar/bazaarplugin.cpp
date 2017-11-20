@@ -123,6 +123,7 @@ VcsJob* BazaarPlugin::createWorkingCopy(const VcsLocation& sourceRepository, con
 VcsJob* BazaarPlugin::diff(const QUrl& fileOrDirectory, const VcsRevision& srcRevision, const VcsRevision& dstRevision, VcsDiff::Type, IBasicVersionControl::RecursionMode recursion)
 {
     Q_UNUSED(recursion);
+    // TODO support m_contextLines (less urgent because Phabricator doesn't support Bazaar)
     VcsJob* job = new DiffJob(BazaarUtils::workingCopy(fileOrDirectory), BazaarUtils::getRevisionSpecRange(srcRevision, dstRevision), fileOrDirectory, this);
     return job;
 }

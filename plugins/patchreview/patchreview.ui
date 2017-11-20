@@ -72,12 +72,38 @@
         </spacer>
        </item>
        <item>
+        <widget class="QSpinBox" name="diffContext">
+         <property name="toolTip">
+          <string>lines of context for the unified diff</string>
+         </property>
+         <property name="specialValueText">
+          <string>max</string>
+         </property>
+         <property name="suffix">
+          <string extracomment="lines of context text"/>
+         </property>
+         <property name="minimum">
+          <number>0</number>
+         </property>
+         <property name="maximum">
+          <number>999</number>
+         </property>
+         <property name="value">
+          <number>3</number>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QPushButton" name="updateButton">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
+         </property>
+         <property name="toolTip">
+          <string>Click to update the patch
+Right-click to select the number of lines of context the patch should show.</string>
          </property>
          <property name="text">
           <string>Update</string>

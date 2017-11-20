@@ -170,7 +170,7 @@ void CMakeServerImportJob::doStart()
 {
     connect(m_server.data(), &CMakeServer::response, this, &CMakeServerImportJob::processResponse);
 
-    m_server->handshake(m_project->path(), CMake::currentBuildDir(m_project));
+    m_server->handshake(m_project->path(), CMake::currentCanonicalBuildDir(m_project));
 }
 
 void CMakeServerImportJob::processResponse(const QJsonObject& response)

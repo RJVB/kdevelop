@@ -131,12 +131,11 @@ public:
         const auto filter = i18n("*|Text File\n");
         auto parent = Core::self()->uiControllerInternal()->defaultMainWindow();
 
-        // use special dialogs in a KDE session, native dialogs elsewhere
-        if (qEnvironmentVariableIsSet("KDE_FULL_SESSION")) {
-            const auto result = KEncodingFileDialog::getOpenUrlsAndEncoding(QString(), dir,
-                filter, parent, caption);
-            return {result.URLs, result.encoding};
-        }
+#ifndef KDEV_USE_NATIVE_DIALOGS
+        const auto result = KEncodingFileDialog::getOpenUrlsAndEncoding(QString(), dir,
+            filter, parent, caption);
+        return {result.URLs, result.encoding};
+#endif
 
         // note: can't just filter on text files using the native dialog, just display all files
         // see https://phabricator.kde.org/D622#11679

@@ -52,6 +52,7 @@ Q_SIGNALS:
     void entries(FileManagerListJob* job, ProjectFolderItem* baseItem,
                  const KIO::UDSEntryList& entries);
     void nextJob();
+    void watchDir(const QString& path);
 
 private Q_SLOTS:
     void slotEntries(KIO::Job* job, const KIO::UDSEntryList& entriesIn );

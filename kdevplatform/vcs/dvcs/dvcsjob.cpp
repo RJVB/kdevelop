@@ -154,6 +154,16 @@ QVariant DVcsJob::fetchResults()
 void DVcsJob::start()
 {
     Q_ASSERT_X(d->status != JobRunning, "DVCSjob::start", "Another proccess was started using this job class");
+    if( d->status == JobRunning ) {
+        QString error = i18n( "Another process was started using this job class" );
+        d->model->appendLine(error);
+        setError( 255 );
+        setErrorText(error);
+        d->status = JobFailed;
+        emitResult();
+        qCWarning(VCS) << "DVCSjob::start:" << error;
+        return;
+    }
 
     const QDir& workingdir = directory();
     if( !workingdir.exists() ) {
@@ -163,6 +173,7 @@ void DVcsJob::start()
         setErrorText(error);
         d->status = JobFailed;
         emitResult();
+        qCWarning(VCS) << "DVCSjob::start:" << error;
         return;
     }
     if( !workingdir.isAbsolute() ) {
@@ -172,6 +183,7 @@ void DVcsJob::start()
         setErrorText(error);
         d->status = JobFailed;
         emitResult();
+        qCWarning(VCS) << "DVCSjob::start:" << error;
         return;
     }
 
@@ -189,6 +201,17 @@ void DVcsJob::start()
     d->childproc->start();
 
     d->model->appendLine(directory().path() + "> " + commandDisplay);
+
+    if (!d->childproc->waitForStarted(1000)) {
+        QString error = i18n("DVCSJob::start: %1 failed to start after 1s: state=%2 %3",
+            commandDisplay, d->childproc->state(), d->childproc->errorString());
+        d->model->appendLine(error);
+        // don't raise the error (emitResult) and don't change the job's status
+        // just print a warning.
+//         setError( 255 );
+//         setErrorText(error);
+        qCWarning(VCS) << error;
+    }
 }
 
 void DVcsJob::setCommunicationMode(KProcess::OutputChannelMode comm)
@@ -208,9 +231,11 @@ void DVcsJob::slotProcessError( QProcess::ProcessError err )
     setError(OutputJob::FailedShownError); //we don't want to trigger a message box
 
     d->errorOutput = d->childproc->readAllStandardError();
+    QByteArray stdOut = d->childproc->readAllStandardOutput();
 
     QString displayCommand = KShell::joinArgs(dvcsCommand());
-    QString completeErrorText = i18n("Process '%1' exited with status %2\n%3", displayCommand, d->childproc->exitCode(), QString::fromLocal8Bit(d->errorOutput) );
+    QString completeErrorText = i18n("Process '%1' exited with status %2\n\"%3\"\n\"%4\"",
+        displayCommand, d->childproc->exitCode(), QString::fromLocal8Bit(stdOut), QString::fromLocal8Bit(d->errorOutput) );
     setErrorText( completeErrorText );
 
     QString errorValue;
@@ -237,11 +262,11 @@ void DVcsJob::slotProcessError( QProcess::ProcessError err )
         errorValue = QStringLiteral("UnknownError");
         break;
     }
-    qCDebug(VCS) << "Found an error while running" << displayCommand << ":" << errorValue
+    qCWarning(VCS) << "Found an error while running" << displayCommand << ":" << errorValue
                                                      << "Exit code is:" << d->childproc->exitCode();
-    qCDebug(VCS) << "Error:" << completeErrorText;
-    displayOutput(QString::fromLocal8Bit(d->errorOutput));
-    d->model->appendLine(i18n("Command finished with error %1.", errorValue));
+    qCWarning(VCS) << "Error:" << completeErrorText;
+//     displayOutput(QString::fromLocal8Bit(d->errorOutput));
+    d->model->appendLine(i18n("%1 (%2).", completeErrorText, errorValue));
 
     if(verbosity()==Silent) {
         setVerbosity(Verbose);

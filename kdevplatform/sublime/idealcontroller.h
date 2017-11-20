@@ -28,6 +28,7 @@
 #include <QPointer>
 
 #include "sublimedefs.h"
+#include "sublimeexport.h"
 
 class KActionMenu;
 
@@ -40,7 +41,7 @@ class IdealButtonBarWidget;
 class IdealDockWidget;
 class View;
 
-class IdealController: public QObject
+class KDEVPLATFORMSUBLIME_EXPORT IdealController: public QObject
 {
     Q_OBJECT
 public:

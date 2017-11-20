@@ -323,7 +323,11 @@ KDevelop::VcsJob* PerforcePlugin::diff(const QUrl& fileOrDirectory, const KDevel
     case VcsRevision::Special:
         switch (dstRevision.revisionValue().value<VcsRevision::RevisionSpecialType>()) {
         case VcsRevision::Working:
-            *job << m_perforceExecutable << "diff" << "-du" << depotSrcFileName;
+            if (m_contextLines > 0) {
+                *job << m_perforceExecutable << "diff" << "-dU" << QString::number(m_contextLines) << depotSrcFileName;
+            } else {
+                *job << m_perforceExecutable << "diff" << "-du" << depotSrcFileName;
+            }
             break;
         case VcsRevision::Start:
         case VcsRevision::UserSpecialType:

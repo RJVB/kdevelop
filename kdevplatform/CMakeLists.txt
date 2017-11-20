@@ -15,6 +15,22 @@ set(CMAKECONFIG_INSTALL_DIR "${KDE_INSTALL_CMAKEPACKAGEDIR}/KDevPlatform")
 include(KDevPlatformMacros)
 include(KDevPlatformMacrosInternal)
 
+if (NOT KDEVELOP_BUILD_IDE)
+    # We cannot include this subdirectory because the clang plugin
+    # depends on certain of the library targets defined below.
+    # But we can reduce the build time and disk space overhead
+    # for items that won't be installed. We could disable LTO too
+    # but theoretically that would affect the plugin's performance.
+    string(REPLACE "-Ofast" "-Os" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+    string(REPLACE "-O3" "-Os" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+    string(REPLACE "-O2" "-Os" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+    string(REPLACE "-g" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+    string(REPLACE "-Ofast" "-Os" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    string(REPLACE "-O3" "-Os" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    string(REPLACE "-O2" "-Os" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    string(REPLACE "-g" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+endif()
+
 find_package(Grantlee5 CONFIG)
 set_package_properties(Grantlee5 PROPERTIES
     PURPOSE "Grantlee templating library, needed for file templates"

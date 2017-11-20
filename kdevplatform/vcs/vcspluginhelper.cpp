@@ -185,7 +185,9 @@ void VcsPluginHelper::disposeEventually(KTextEditor::Document *)
 
 void VcsPluginHelper::setupFromContext(Context* context)
 {
-    d->ctxUrls = context->urls();
+    if (context) {
+        d->ctxUrls = context->urls();
+    }
 }
 
 QList<QUrl> VcsPluginHelper::contextUrlList() const
@@ -438,6 +440,7 @@ void VcsPluginHelper::annotationContextMenuAboutToShow( KTextEditor::View* view,
     connect(historyAction, &QAction::triggered, this, [this, rev]() {
         history(rev);
     });
+    menu->setTearOffEnabled(true);
 }
 
 void VcsPluginHelper::handleAnnotationBorderVisibilityChanged(View* view, bool visible)

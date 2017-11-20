@@ -8,6 +8,25 @@ set(KDEVELOP_SOVERSION 52)
 # plugin versions listed in the .desktop files
 set(KDEV_PLUGIN_VERSION 30)
 
+if(APPLE OR WIN32)
+    option(KDEVELOP_NATIVE_DIALOGS "Use native file dialogs instead of KDE dialogs" ON)
+else()
+    option(KDEVELOP_NATIVE_DIALOGS "Use native file dialogs instead of KDE dialogs" OFF)
+endif()
+
+option(KDEVELOP_BUILD_IDE "Build the IDE" ON)
+option(KDEVELOP_BUILD_CLANG_PARSER "Build the Clang-based C/C++ parser (formerly kdev-clang)" ON)
+
+if ((NOT KDEVELOP_BUILD_IDE) AND (NOT KDEVELOP_BUILD_CLANG_PARSER))
+    message(FATAL_ERROR "KDEVELOP_BUILD_IDE and KDEVELOP_BUILD_CLANG_PARSER cannot both be OFF!")
+endif()
+
+if(APPLE OR WIN32)
+    option(KDEVELOP_NATIVE_DIALOGS "Use native file dialogs instead of KDE dialogs" ON)
+else()
+    option(KDEVELOP_NATIVE_DIALOGS "Use native file dialogs instead of KDE dialogs" OFF)
+endif()
+
 # we need some parts of the ECM CMake helpers
 find_package (ECM 5.14.0 REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${KDevelop_SOURCE_DIR}/cmake/modules ${ECM_MODULE_PATH})
@@ -30,6 +49,8 @@ include(CheckFunctionExists)
 
 include(KDEInstallDirs)
 include(KDECMakeSettings)
+
+include(GetGitRevisionDescription)
 
 set(QT_MIN_VERSION "5.5.0")
 find_package(Qt5 ${QT_MIN_VERSION} CONFIG REQUIRED Widgets Concurrent Quick QuickWidgets)
@@ -61,16 +82,18 @@ find_package(KF5 ${KF5_DEP_VERSION} REQUIRED COMPONENTS
   Archive
   Notifications
 )
-find_package(KF5SysGuard CONFIG)
-set_package_properties(KF5SysGuard PROPERTIES
-    PURPOSE "Framework for process listing. Required for the 'Attach to Process' feature"
-    TYPE RECOMMENDED
-)
-find_package(KDevelop-PG-Qt 1.90.90 CONFIG)
-set_package_properties(KDevelop-PG-Qt PROPERTIES
-    PURPOSE "KDevelop parser generator library. Required for the QMake Builder/Manager plugin."
-    TYPE RECOMMENDED
-)
+if (KDEVELOP_BUILD_IDE)
+    find_package(KF5SysGuard CONFIG)
+    set_package_properties(KF5SysGuard PROPERTIES
+        PURPOSE "Framework for process listing. Required for the 'Attach to Process' feature"
+        TYPE RECOMMENDED
+    )
+    find_package(KDevelop-PG-Qt 1.90.90 CONFIG)
+    set_package_properties(KDevelop-PG-Qt PROPERTIES
+        PURPOSE "KDevelop parser generator library. Required for the QMake Builder/Manager plugin."
+        TYPE RECOMMENDED
+    )
+endif()
 
 find_package(SharedMimeInfo REQUIRED)
 
@@ -121,43 +144,69 @@ endif()
 # create config-kdevelop.h
 configure_file(config-kdevelop.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config-kdevelop.h)
 
+# create kdevelop_fullversion.h
+set(KDevelop_FULL_VERSION "${KDevelop_VERSION_MAJOR}.${KDevelop_VERSION_MINOR}.${KDevelop_VERSION_PATCH}")
+git_describe(GIT_FULL_VERSION "--tags")
+if(GIT_FULL_VERSION)
+    # development build, i.e. from a git working copy.
+    # Get the current commit version using `git describe` and
+    # strip the leading v plus the part that matches the version
+    # declared in the project definition above.
+    string(REPLACE "v${KDevelop_FULL_VERSION}" "" COMMIT_VERSION "${GIT_FULL_VERSION}")
+    if(NOT ${COMMIT_VERSION} MATCHES ${GIT_FULL_VERSION})
+        # `git describe` agrees with KDevelop_VERSION_STRING;
+        # make an atomic version string by appending the additional info
+        string(APPEND KDevelop_FULL_VERSION ${COMMIT_VERSION})
+    else()
+        # `git describe` provides a seemingly unrelated version string;
+        # append it in parentheses.
+        string(APPEND KDevelop_FULL_VERSION " (${GIT_FULL_VERSION})")
+    endif()
+    message(STATUS "Setting KDevelop version to: ${KDevelop_FULL_VERSION}")
+endif()
+configure_file(kdevelop_fullversion.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/kdevelop_fullversion.h)
+
 add_subdirectory(kdevplatform)
 add_subdirectory(plugins)
 
-add_subdirectory(pics)
-add_subdirectory(app)
-add_subdirectory(app_templates)
-add_subdirectory(file_templates)
-add_subdirectory(shortcuts)
-add_subdirectory(doc)
+if (KDEVELOP_BUILD_IDE)
+    add_subdirectory(pics)
+    add_subdirectory(app)
+    add_subdirectory(app_templates)
+    add_subdirectory(file_templates)
+    add_subdirectory(shortcuts)
+    add_subdirectory(doc)
+endif()
 
 set(CMAKECONFIG_INSTALL_DIR "${KDE_INSTALL_CMAKEPACKAGEDIR}/KDevelop")
-configure_package_config_file("${CMAKE_CURRENT_SOURCE_DIR}/KDevelopConfig.cmake.in"
-                                  "${CMAKE_CURRENT_BINARY_DIR}/KDevelopConfig.cmake"
-                                  INSTALL_DESTINATION ${CMAKECONFIG_INSTALL_DIR}
-)
-ecm_setup_version(${KDevelop_VERSION_MAJOR}.${KDevelop_VERSION_MINOR}.${KDevelop_VERSION_PATCH}
-                  VARIABLE_PREFIX KDEVELOP
-                  VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/kdevelop_version.h"
-                  PACKAGE_VERSION_FILE "${CMAKE_CURRENT_BINARY_DIR}/KDevelopConfigVersion.cmake"
-)
-install(FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/kdevelop_version.h"
-        DESTINATION "${KDE_INSTALL_INCLUDEDIR}/kdevelop")
-install(FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/KDevelopConfig.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/KDevelopConfigVersion.cmake"
-        DESTINATION "${CMAKECONFIG_INSTALL_DIR}" )
-install(EXPORT KDevelopTargets DESTINATION "${CMAKECONFIG_INSTALL_DIR}" NAMESPACE KDev:: FILE KDevelopTargets.cmake)
+if (KDEVELOP_BUILD_IDE)
+    configure_package_config_file("${CMAKE_CURRENT_SOURCE_DIR}/KDevelopConfig.cmake.in"
+                                      "${CMAKE_CURRENT_BINARY_DIR}/KDevelopConfig.cmake"
+                                      INSTALL_DESTINATION ${CMAKECONFIG_INSTALL_DIR}
+    )
+    ecm_setup_version(${KDevelop_VERSION_MAJOR}.${KDevelop_VERSION_MINOR}.${KDevelop_VERSION_PATCH}
+                      VARIABLE_PREFIX KDEVELOP
+                      VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/kdevelop_version.h"
+                      PACKAGE_VERSION_FILE "${CMAKE_CURRENT_BINARY_DIR}/KDevelopConfigVersion.cmake"
+    )
+    install(FILES
+            "${CMAKE_CURRENT_BINARY_DIR}/kdevelop_version.h"
+            DESTINATION "${KDE_INSTALL_INCLUDEDIR}/kdevelop")
+    install(FILES
+            "${CMAKE_CURRENT_BINARY_DIR}/KDevelopConfig.cmake"
+            "${CMAKE_CURRENT_BINARY_DIR}/KDevelopConfigVersion.cmake"
+            DESTINATION "${CMAKECONFIG_INSTALL_DIR}" )
+    install(EXPORT KDevelopTargets DESTINATION "${CMAKECONFIG_INSTALL_DIR}" NAMESPACE KDev:: FILE KDevelopTargets.cmake)
 
-# kdebugsettings file
-install(FILES kdevelop.categories DESTINATION ${KDE_INSTALL_CONFDIR})
+    # kdebugsettings file
+    install(FILES kdevelop.categories DESTINATION ${KDE_INSTALL_CONFDIR})
 
-# CTestCustom.cmake has to be in the CTEST_BINARY_DIR.
-# in the KDE build system, this is the same as CMAKE_BINARY_DIR.
-configure_file(${CMAKE_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR}/CTestCustom.cmake)
+    # CTestCustom.cmake has to be in the CTEST_BINARY_DIR.
+    # in the KDE build system, this is the same as CMAKE_BINARY_DIR.
+    configure_file(${CMAKE_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR}/CTestCustom.cmake)
 
-install(FILES org.kde.kdevelop.appdata.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
+    install(FILES org.kde.kdevelop.appdata.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
+endif()
 
 # Make it possible to use the po files fetched by the fetch-translations step
 ki18n_install(po)

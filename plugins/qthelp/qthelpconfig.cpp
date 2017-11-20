@@ -36,6 +36,7 @@
 #include "qthelp_config_shared.h"
 #include "debug.h"
 #include "qthelpplugin.h"
+#include "qthelpexternalassistant.h"
 
 enum Column
 {
@@ -119,6 +120,27 @@ QtHelpConfig::QtHelpConfig(QtHelpPlugin* plugin, QWidget *parent)
     m_configWidget->qchSearchDir->setMode(KFile::Directory);
     connect(m_configWidget->qchSearchDir, &KUrlRequester::textChanged,
             this, &QtHelpConfig::changed);
+    connect(m_configWidget->externalViewerCheckBox, &QCheckBox::toggled,
+            this, static_cast<void(QtHelpConfig::*)()>(&QtHelpConfig::changed));
+    m_configWidget->externalViewerCheckBox->setToolTip(i18n("Use Qt's Assistant as an external viewer,\n"
+        "instead of the embedded viewer."));
+    m_configWidget->externalViewerExecutable->setToolTip(
+        i18n("The path to the Assistant copy to use as an external viewer,\n"
+            "can also be a script calling the Assistant or any other\n"
+            "application that understands the same remote control protocol.\n"
+            "KDevelop will try to find the application when this is not set.\n"
+            "It is your responsibility to ensure that the viewer is configured\n"
+            "to use a qhc help collection matching KDevelop's collection!"));
+    QString currentExtViewer;
+    if (KDevelop::QtHelpExternalAssistant::self()->hasExternalViewer(&currentExtViewer)) {
+        m_configWidget->externalViewerExecutable->setPlaceholderText(
+            i18n("path to Qt Assistant (%1)", currentExtViewer));
+    } else {
+        m_configWidget->externalViewerExecutable->setPlaceholderText(
+            i18n("path to Qt Assistant"));
+    }
+    connect(m_configWidget->externalViewerExecutable, &KUrlRequester::textChanged,
+            this, &QtHelpConfig::changed);
 
     // Set availability information for QtHelp
     m_configWidget->messageAvailabilityQtDocs->setCloseButtonVisible(false);
@@ -128,6 +150,8 @@ QtHelpConfig::QtHelpConfig(QtHelpPlugin* plugin, QWidget *parent)
         m_configWidget->messageAvailabilityQtDocs->setText(
             i18n("The command \"qmake -query\" could not provide a path to a QtHelp file (QCH)."));
         m_configWidget->loadQtDocsCheckBox->setVisible(false);
+        m_configWidget->externalViewerCheckBox->setVisible(false);
+        m_configWidget->externalViewerExecutable->setVisible(false);
     }
     reset();
 }
@@ -154,8 +178,10 @@ void QtHelpConfig::apply()
     }
     QString searchDir = m_configWidget->qchSearchDir->text();
     bool loadQtDoc = m_configWidget->loadQtDocsCheckBox->isChecked();
+    ExternalViewerSettings extViewer(m_configWidget->externalViewerCheckBox->isChecked(),
+        m_configWidget->externalViewerExecutable->text());
 
-    qtHelpWriteConfig(iconList, nameList, pathList, ghnsList, searchDir, loadQtDoc);
+    qtHelpWriteConfig(iconList, nameList, pathList, ghnsList, searchDir, loadQtDoc, extViewer);
     static_cast<QtHelpPlugin*>(plugin())->readConfig();
 }
 
@@ -166,7 +192,8 @@ void QtHelpConfig::reset()
     QStringList iconList, nameList, pathList, ghnsList;
     QString searchDir;
     bool loadQtDoc;
-    qtHelpReadConfig(iconList, nameList, pathList, ghnsList, searchDir, loadQtDoc);
+    ExternalViewerSettings extViewer;
+    qtHelpReadConfig(iconList, nameList, pathList, ghnsList, searchDir, loadQtDoc, extViewer);
 
     const int size = qMin(qMin(iconList.size(), nameList.size()), pathList.size());
     for(int i = 0; i < size; ++i) {
@@ -175,6 +202,8 @@ void QtHelpConfig::reset()
     }
     m_configWidget->qchSearchDir->setText(searchDir);
     m_configWidget->loadQtDocsCheckBox->setChecked(loadQtDoc);
+    m_configWidget->externalViewerCheckBox->setChecked(extViewer.useExtViewer);
+    m_configWidget->externalViewerExecutable->setText(extViewer.extViewerExecutable);
 
     emit changed();
 }

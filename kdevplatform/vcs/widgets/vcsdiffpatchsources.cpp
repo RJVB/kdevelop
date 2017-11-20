@@ -20,6 +20,7 @@
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QSizePolicy>
 #include <QDir>
 #include <QFontDatabase>
 #include <QLabel>
@@ -44,6 +45,25 @@
 
 using namespace KDevelop;
 
+class VCSCommitMessageEditor : public KTextEdit {
+    Q_OBJECT
+public:
+    VCSCommitMessageEditor()
+        : m_minWidth(KTextEdit::minimumSizeHint().width())
+    {}
+    void setMinWidth(int w)
+    {
+        m_minWidth = w;
+        setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    }
+    QSize minimumSizeHint() const override
+    {
+        return QSize(m_minWidth, KTextEdit::minimumSizeHint().height());
+    }
+protected:
+    int m_minWidth;
+};
+
 VCSCommitDiffPatchSource::VCSCommitDiffPatchSource(VCSDiffUpdater* updater)
     : VCSDiffPatchSource(updater), m_vcs(updater->vcs())
 {
@@ -52,15 +72,22 @@ VCSCommitDiffPatchSource::VCSCommitDiffPatchSource(VCSDiffUpdater* updater)
     QVBoxLayout* layout = new QVBoxLayout(m_commitMessageWidget.data());
     layout->setMargin(0);
 
-    m_commitMessageEdit = new KTextEdit;
-    m_commitMessageEdit.data()->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
-    m_commitMessageEdit.data()->setLineWrapMode(QTextEdit::NoWrap);
-    m_vcs->setupCommitMessageEditor(updater->url(), m_commitMessageEdit.data());
+    VCSCommitMessageEditor *editor = new VCSCommitMessageEditor;
+    m_commitMessageEdit = editor;
+    editor->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    editor->setLineWrapMode(QTextEdit::NoWrap);
+    // set the message editor to be 72 characters wide.
+    // Given the widget margins that requires 74 actual characters.
+    editor->setMinWidth(editor->fontMetrics().width(QString(74, 'm')));
+    m_vcs->setupCommitMessageEditor(updater->url(), editor);
 
     QHBoxLayout* titleLayout = new QHBoxLayout;
-    titleLayout->addWidget(new QLabel(i18n("Commit Message:")));
+    QLabel *label = new QLabel(i18n("Commit Message:"));
+    // Copy the message editor tooltip to the label to increase its chances of being seen
+    label->setToolTip(editor->toolTip());
+    titleLayout->addWidget(label);
 
-    m_oldMessages = new KComboBox(m_commitMessageWidget.data());
+    m_oldMessages = new KComboBox(editor);
 
     m_oldMessages->addItem(i18n("Old Messages"));
     foreach(const QString& message, oldMessages())
@@ -72,7 +99,7 @@ VCSCommitDiffPatchSource::VCSCommitDiffPatchSource(VCSDiffUpdater* updater)
     titleLayout->addWidget(m_oldMessages);
 
     layout->addLayout(titleLayout);
-    layout->addWidget(m_commitMessageEdit.data());
+    layout->addWidget(editor);
     connect(this, &VCSCommitDiffPatchSource::reviewCancelled, this, &VCSCommitDiffPatchSource::addMessageToHistory);
     connect(this, &VCSCommitDiffPatchSource::reviewFinished, this, &VCSCommitDiffPatchSource::addMessageToHistory);
 }
@@ -160,6 +187,7 @@ VCSDiffPatchSource::~VCSDiffPatchSource()
 {
     QFile::remove(m_file.toLocalFile());
     delete m_updater;
+    qDebug() << "~VCSDiffPatchSource()" << this;
 }
 
 QUrl VCSDiffPatchSource::baseDir() const {
@@ -209,11 +237,16 @@ void VCSDiffPatchSource::updateFromDiff(const VcsDiff& vcsdiff)
 void VCSDiffPatchSource::update() {
     if(!m_updater)
         return;
+    m_updater->setContextLines(m_contextLines == 0? INT_MAX : m_contextLines);
     updateFromDiff(m_updater->update());
 }
 
 VCSCommitDiffPatchSource::~VCSCommitDiffPatchSource() {
     delete m_commitMessageWidget.data();
+//     if (m_commitMessageWidget.data()) {
+//         m_commitMessageWidget.data()->deleteLater();
+//     }
+    qDebug() << "~VCSCommitDiffPatchSource()" << this;
 }
 
 bool VCSCommitDiffPatchSource::canSelectFiles() const {
@@ -297,6 +330,7 @@ bool showVcsDiff(IPatchSource* vcsDiff)
 
 VcsDiff VCSStandardDiffUpdater::update() const
 {
+    m_vcs->setDiffContextLines(m_contextLines);
     QScopedPointer<VcsJob> diffJob(m_vcs->diff(m_url,
                                    KDevelop::VcsRevision::createSpecialRevision(KDevelop::VcsRevision::Base),
                                    KDevelop::VcsRevision::createSpecialRevision(KDevelop::VcsRevision::Working)));
@@ -318,3 +352,4 @@ VCSStandardDiffUpdater::~VCSStandardDiffUpdater() {
 VCSDiffUpdater::~VCSDiffUpdater() {
 }
 
+#include "vcsdiffpatchsources.moc"

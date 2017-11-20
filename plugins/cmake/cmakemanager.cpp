@@ -128,7 +128,7 @@ Path CMakeManager::buildDirectory(KDevelop::ProjectBaseItem *item) const
 //     if(fi)
 //         ret.addPath(fi->buildDir());
 //     return ret;
-    return Path(CMake::currentBuildDir(item->project()));
+    return Path(CMake::currentCanonicalBuildDir(item->project()));
 }
 
 KDevelop::ProjectFolderItem* CMakeManager::import( KDevelop::IProject *project )
@@ -173,6 +173,8 @@ private:
 
         server->deleteLater();
         server = nullptr;
+
+        qCWarning(CMAKE) << "CMake server not available, using compile_commands.json to import" << project->name();
 
         // parse the JSON file
         CMakeImportJsonJob* job = new CMakeImportJsonJob(project, this);

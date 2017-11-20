@@ -26,6 +26,7 @@
 #include <QDirIterator>
 #include "qthelpprovider.h"
 #include "qthelpqtdoc.h"
+#include "qthelpexternalassistant.h"
 #include "qthelp_config_shared.h"
 #include "debug.h"
 #include "qthelpconfig.h"
@@ -39,6 +40,7 @@ QtHelpPlugin::QtHelpPlugin(QObject* parent, const QVariantList& args)
     , m_qtHelpProviders()
     , m_qtDoc(new QtHelpQtDoc(this, QVariantList()))
     , m_loadSystemQtDoc(false)
+    , m_useExternalViewer(false)
 {
     Q_UNUSED(args);
     s_plugin = this;
@@ -55,11 +57,18 @@ void QtHelpPlugin::readConfig()
 {
     QStringList iconList, nameList, pathList, ghnsList;
     QString searchDir;
-    qtHelpReadConfig(iconList, nameList, pathList, ghnsList, searchDir, m_loadSystemQtDoc);
+    ExternalViewerSettings extViewer;
+    qtHelpReadConfig(iconList, nameList, pathList, ghnsList, searchDir, m_loadSystemQtDoc, extViewer);
 
     searchHelpDirectory(pathList, nameList, iconList, searchDir);
     loadQtHelpProvider(pathList, nameList, iconList);
     loadQtDocumentation(m_loadSystemQtDoc);
+    m_useExternalViewer = extViewer.useExtViewer;
+    m_externalViewerExecutable = extViewer.extViewerExecutable;
+    if (m_useExternalViewer) {
+        KDevelop::QtHelpExternalAssistant::self()->setUseExternalViewer(m_useExternalViewer);
+        KDevelop::QtHelpExternalAssistant::self()->setExternalViewerExecutable(m_externalViewerExecutable);
+    }
 
     emit changedProvidersList();
 }
@@ -157,6 +166,11 @@ QList<QtHelpProvider*> QtHelpPlugin::qtHelpProviderLoaded()
 bool QtHelpPlugin::isQtHelpQtDocLoaded() const
 {
     return m_loadSystemQtDoc;
+}
+
+bool QtHelpPlugin::useExternalViewer() const
+{
+    return m_useExternalViewer;
 }
 
 bool QtHelpPlugin::isQtHelpAvailable() const

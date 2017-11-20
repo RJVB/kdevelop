@@ -844,7 +844,7 @@ struct CreateOutlineDialog
                     // already called 'widget->show()'.
                     auto list = dialog->widget()->ui.list;
                     QMetaObject::invokeMethod(list, "setCurrentIndex", Qt::QueuedConnection, Q_ARG(QModelIndex, index));
-                    QMetaObject::invokeMethod(list, "scrollTo", Qt::QueuedConnection, Q_ARG(QModelIndex, index), Q_ARG(QAbstractItemView::ScrollHint, QAbstractItemView::PositionAtCenter));
+                    QMetaObject::invokeMethod(list, "scrollTo", Qt::QueuedConnection, Q_ARG(const QModelIndex, index), Q_ARG(QAbstractItemView::ScrollHint, QAbstractItemView::PositionAtCenter));
                 }
                 ++num;
             }

@@ -29,6 +29,7 @@
 
 #include "config-kdevelop.h"
 #include "kdevelop_version.h"
+#include "kdevelop_fullversion.h"
 
 #include "urlinfo.h"
 
@@ -73,11 +74,15 @@
 
 #include <iostream>
 
-#ifdef Q_OS_MAC
+#include <QFileOpenEvent>
+#ifdef Q_OS_MACOS
 #include <CoreFoundation/CoreFoundation.h>
+#include <unistd.h>
+#include <stdio.h>
 #endif
 
 using namespace KDevelop;
+struct UrlInfo;
 
 namespace {
 
@@ -110,15 +115,21 @@ class KDevelopApplication:
     public QApplication
 #endif
 {
+    // Q_OBJECT wouldn't be required in KDEVELOP_SINGLE_APP if moc respected CPP tokens.
+    Q_OBJECT
 public:
     explicit KDevelopApplication(int &argc, char **argv, bool GUIenabled = true)
 #if KDEVELOP_SINGLE_APP
         : SharedTools::QtSingleApplication(QStringLiteral("KDevelop"), argc, argv)
 #else
         : QApplication(argc, argv, GUIenabled)
+        , m_session(0)
+        , queueFileOpenEvents(false)
 #endif
         {
+#if KDEVELOP_SINGLE_APP
             Q_UNUSED(GUIenabled);
+#endif
             connect(this, &QGuiApplication::saveStateRequest, this, &KDevelopApplication::saveState);
         }
 
@@ -158,6 +169,16 @@ public Q_SLOTS:
     {
         openFiles({UrlInfo(file)});
     }
+#else
+    void startHandlingFileOpenEvents(QString *session);
+    void handleQueuedFileOpenRequests();
+
+protected:
+    /**
+     * Event filter for QApplication to handle Mac OS X style file open requests
+     * which Qt translates into FileOpen application events.
+     */
+    bool eventFilter(QObject *obj, QEvent *event) Q_DECL_OVERRIDE;
 #endif
 
 private Q_SLOTS:
@@ -174,6 +195,12 @@ private Q_SLOTS:
             sm.setRestartCommand({QCoreApplication::applicationFilePath(), "-session", x11SessionId, "-s", kdevelopSessionId});
         }
     }
+#if !KDEVELOP_SINGLE_APP
+private:
+    QString *m_session;
+    bool queueFileOpenEvents;
+    QVector<UrlInfo> fileOpenRequestList;
+#endif
 };
 
 /// Tries to find a session identified by @p data in @p sessions.
@@ -244,7 +271,7 @@ static int openProjectInRunningInstance(const QVector<UrlInfo>& paths, qint64 pi
 
 /// Gets the PID of a running KDevelop instance, eventually asking the user if there is more than one.
 /// Returns -1 in case there are no running sessions.
-static qint64 getRunningSessionPid()
+static qint64 getRunningSessionPid(QString *sessionNameReturn=NULL)
 {
     SessionInfos candidates;
     foreach( const KDevelop::SessionInfo& si, KDevelop::SessionController::availableSessionInfos() ) {
@@ -263,6 +290,9 @@ static qint64 getRunningSessionPid()
     else {
         const QString title = i18n("Select the session to open the document in");
         sessionUuid = KDevelop::SessionController::showSessionChooserDialog(title, true);
+    }
+    if (sessionNameReturn) {
+        *sessionNameReturn = sessionUuid;
     }
     return KDevelop::SessionController::sessionRunInfo(sessionUuid).holderPid;
 }
@@ -301,6 +331,74 @@ static qint64 findSessionPid(const QString &sessionId)
     return sessionInfo.holderPid;
 }
 
+#if !KDEVELOP_SINGLE_APP
+void KDevelopApplication::startHandlingFileOpenEvents(QString *session)
+{
+    queueFileOpenEvents = true;
+    m_session = session;
+    installEventFilter(this);
+    // let the eventFilter construct a list of all files to open, from any pending
+    // FileOpen events:
+    processEvents();
+    queueFileOpenEvents = false;
+    qCDebug(APP) << "initial FileOpen events processed:" << fileOpenRequestList.count();
+    // process the list of files to open:
+    handleQueuedFileOpenRequests();
+}
+
+void KDevelopApplication::handleQueuedFileOpenRequests()
+{
+    if (fileOpenRequestList.isEmpty()) {
+        return;
+    }
+    int pid = getRunningSessionPid(m_session);
+    if (pid > 0) {
+        if (m_session) {
+            qCDebug(APP) << "opening" << fileOpenRequestList.count() << "file(s) in session" << *m_session << "pid=" << pid;
+        }
+        openFilesInRunningInstance(fileOpenRequestList, pid);
+        // in a more subtle implementation, openFilesInRunningInstance() would return a list
+        // containing the documents that failed to open, and we could reininitialise fileOpenRequestList
+        // from that list.
+        fileOpenRequestList.clear();
+    }
+}
+
+bool KDevelopApplication::eventFilter(QObject *obj, QEvent *event)
+{
+    if (event->type() == QEvent::FileOpen) {
+        QFileOpenEvent *fileOpenEvent = static_cast<QFileOpenEvent*>(event);
+        qCDebug(APP) << "FileOpen event for" << fileOpenEvent->url();
+        fileOpenRequestList.append(UrlInfo(fileOpenEvent->file()));
+        if (!queueFileOpenEvents){
+            handleQueuedFileOpenRequests();
+        }
+        // don't eat the event
+        return false;
+    }
+
+    return QObject::eventFilter(obj, event);
+}
+
+static bool shouldSimulatePSOption(int argc, char *argv[])
+{
+#ifdef Q_OS_MACOS
+    if ((argc == 2 && qstrncmp(argv[1], "-psn_", 5) == 0)
+        || (argc== 1 && !isatty(fileno(stdin)))){
+        // this is a pure start from the Finder or Dock, without any arguments to open.
+        // Present the session selection dialog (= simulate the --ps option) if the user
+        // holds the Command (sic) key while we start. Without that modified we'd also
+        // be doing this instead of handling the FileOpen event associate with a file-open
+        // request from the Finder or the Dock.
+        if (QApplication::queryKeyboardModifiers() & Qt::ControlModifier) {
+            return true;
+        }
+    }
+#endif
+    return false;
+}
+#endif
+
 int main( int argc, char *argv[] )
 {
     QElapsedTimer timer;
@@ -326,7 +424,7 @@ int main( int argc, char *argv[] )
 
     QCoreApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     CFBundleRef mainBundle = CFBundleGetMainBundle();
     if (mainBundle) {
         // get the application's Info Dictionary. For app bundles this would live in the bundle's Info.plist,
@@ -366,9 +464,14 @@ int main( int argc, char *argv[] )
 
     KDevelopApplication app(argc, argv);
     KLocalizedString::setApplicationDomain("kdevelop");
+#ifdef Q_OS_MACOS
+    if (!QGuiApplication::platformName().contains(QLatin1String("cocoa"))) {
+        QCoreApplication::setAttribute(Qt::AA_DontUseNativeMenuBar);
+    }
+#endif
 
     static const char description[] = I18N_NOOP( "The KDevelop Integrated Development Environment" );
-    KAboutData aboutData( QStringLiteral("kdevelop"), i18n( "KDevelop" ), QByteArray(KDEVELOP_VERSION_STRING), i18n(description), KAboutLicense::GPL,
+    KAboutData aboutData( QStringLiteral("kdevelop"), i18n( "KDevelop" ), QByteArray(KDEVELOP_FULL_VERSION_STRING), i18n(description), KAboutLicense::GPL,
                           i18n("Copyright 1999-2017, The KDevelop developers"), QString(), QStringLiteral("https://www.kdevelop.org/"));
     aboutData.setDesktopFileName(QStringLiteral("org.kde.kdevelop"));
     aboutData.addAuthor( i18n("Kevin Funk"), i18n( "Co-maintainer, C++/Clang, QA, Windows Support" ), QStringLiteral("kfunk@kde.org") );
@@ -476,7 +579,8 @@ int main( int argc, char *argv[] )
     // which only shows the running sessions, and the user can pick one.
     parser.addOption(QCommandLineOption{QStringList{"pid"}});
 
-    parser.addPositionalArgument(QStringLiteral("files"), i18n( "Files to load" ), QStringLiteral("[FILE...]"));
+    parser.addPositionalArgument(QStringLiteral("files"),
+                     i18n( "Files to load, or directories to load as projects" ), QStringLiteral("[FILE[:line[:column]] | DIRECTORY]..."));
 
     // The session-controller needs to arguments to eventually pass them to newly opened sessions
     KDevelop::SessionController::setArguments(argc, argv);
@@ -504,6 +608,8 @@ int main( int argc, char *argv[] )
         return 0;
     }
 
+    QString session;
+
     // Handle extra arguments, which stand for files to open
     QVector<UrlInfo> initialFiles;
     QVector<UrlInfo> initialDirectories;
@@ -529,7 +635,7 @@ int main( int argc, char *argv[] )
 #else
         qint64 pid = -1;
         if (parser.isSet(QStringLiteral("open-session"))) {
-            const QString session = findSessionId(availableSessionInfos, parser.value(QStringLiteral("open-session")));
+            session = findSessionId(availableSessionInfos, parser.value(QStringLiteral("open-session")));
             if (session.isEmpty()) {
                 return 1;
             } else if (KDevelop::SessionController::isSessionRunning(session)) {
@@ -547,7 +653,6 @@ int main( int argc, char *argv[] )
     }
 
     // if empty, restart kdevelop with last active session, see SessionController::defaultSessionId
-    QString session;
 
     uint nRunningSessions = 0;
     foreach(const KDevelop::SessionInfo& si, availableSessionInfos)
@@ -590,12 +695,18 @@ int main( int argc, char *argv[] )
         }
     }
 
+#if KDEVELOP_SINGLE_APP
+    const bool simulatePS = false;
     if(parser.isSet(QStringLiteral("ps")))
+#else
+    const bool simulatePS = shouldSimulatePSOption(argc, argv);
+    if(parser.isSet(QStringLiteral("ps")) || simulatePS)
+#endif
     {
         bool onlyRunning = parser.isSet(QStringLiteral("pid"));
         session = KDevelop::SessionController::showSessionChooserDialog(i18n("Select the session you would like to use"), onlyRunning);
         if(session.isEmpty())
-            return 1;
+            return simulatePS ? 0 : 1;
     }
 
     if ( parser.isSet(QStringLiteral("debug")) ) {
@@ -684,11 +795,36 @@ int main( int argc, char *argv[] )
 
     KDevIDEExtension::init();
 
+#if !KDEVELOP_SINGLE_APP
+    // start filtering events, so that on OS X we can handle file open requests
+    // sent through LaunchServices (i.e. the Finder).
+    // startHandlingFileOpenEvents() will call processEvents(), and if a FileOpen event
+    // was already queued it may present a session selection dialog in which case
+    // session has to be changed. This happens on OS X when we were started because the user asked
+    // the Finder or Dock to open a file with KDevelop, and is the reason a pointer to <session>
+    // is handed to startHandlingFileOpenEvents().
+    // startHandlingFileOpenEvents() will cause all pending FileOpen events to be appended
+    // to a list, and will then attempt to open the documents in that list. If that attempt
+    // succeeds (because at least 1 session is already open and running), session will
+    // have been set to the session where the document(s) was/were opened.
+    app.startHandlingFileOpenEvents(&session);
+#endif
+
     if(!Core::initialize(Core::Default, session))
         return 5;
 
     // register a DBUS service for this process, so that we can open files in it from other invocations
     QDBusConnection::sessionBus().registerService(QStringLiteral("org.kdevelop.kdevelop-%1").arg(app.applicationPid()));
+
+#if !KDEVELOP_SINGLE_APP
+    // When the user requests to open a file (or multiple files) in KDevelop on OS X, and no KDevelop instance is
+    // already running, the initial attempt to open these files may fail because getRunningSessionPid() fails.
+    // In that case the FileOpen requests are still queued, and we should be able to process them now.
+    // NB: it is not impossible that another session was opened between this point and the initial call to
+    // startHandlingFileOpenEvents(). If that happens, the user will probably be asked to pick a session to open
+    // the queued document(s) in, meaning session could change.
+    app.handleQueuedFileOpenRequests();
+#endif
 
     Core* core = Core::self();
     if (!QProcessEnvironment::systemEnvironment().contains(QStringLiteral("KDEV_DISABLE_WELCOMEPAGE"))) {
@@ -792,3 +928,5 @@ int main( int argc, char *argv[] )
 
     return app.exec();
 }
+
+#include "main.moc"

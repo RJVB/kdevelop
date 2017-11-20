@@ -31,6 +31,7 @@ class PatchReviewPlugin;
 class LocalPatchSource;
 class QModelIndex;
 class QSortFilterProxyModel;
+class DiffContextMenu;
 
 class PatchReviewToolView : public QWidget
 {
@@ -101,6 +102,8 @@ private:
 
     class PatchFilesModel* m_fileModel;
     QSortFilterProxyModel* m_fileSortProxyModel;
+
+    DiffContextMenu *m_diffContextMenu;
 
 public Q_SLOTS:
     void documentActivated( KDevelop::IDocument* );

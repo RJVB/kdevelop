@@ -40,6 +40,11 @@
 #include <QJsonObject>
 #include <QJsonArray>
 
+#include <QGestureEvent>
+#include <QGesture>
+#include <QTapAndHoldGesture>
+#include <QContextMenuEvent>
+
 #include <KMessageBox>
 #include <KLocalizedString>
 #include <KTextEditor/Document>
@@ -51,6 +56,76 @@
 #endif
 
 using namespace KDevelop;
+
+class DiffContextMenu : public QObject
+{
+    Q_OBJECT
+public:
+    DiffContextMenu(PatchReviewPlugin *prPlugin)
+        : QObject(dynamic_cast<QObject*>(prPlugin))
+        , m_prPlugin(prPlugin)
+    {
+        m_contextActions = new QActionGroup(this);
+        m_contextActions->setExclusive(true);
+        QAction *title = new QAction(i18n("diff context"), m_contextActions);
+        title->setEnabled(false);
+        m_contextActions->addAction(title);
+        for (int i = 1; i <= 5; ++i) {
+            addContextAction(i);
+        }
+        addContextAction(10);
+        addContextAction(0);
+    }
+
+    void addContextAction(int contextLines)
+    {
+        QAction *action;
+        if (contextLines == 0) {
+            action = new QAction(i18n("whole file"), m_contextActions);
+        } else if (contextLines > 0) {
+            action = new QAction(i18n("%1 lines").arg(contextLines), m_contextActions);
+        } else {
+            return;
+        }
+        action->setData(contextLines);
+        action->setCheckable(true);
+        connect(action, &QAction::triggered, this, [action, this]() {
+            action->setChecked(true);
+            m_prPlugin->forceUpdateWithContext(action->data().toInt());
+        });
+        m_contextActions->addAction(action);
+        if (contextLines == 3) {
+            m_defaultContextAction = action;
+            action->setChecked(true);
+        }
+    }
+
+    bool eventFilter(QObject *obj, QEvent *event) Q_DECL_OVERRIDE
+    {
+        if (event->type() == QEvent::Gesture) {
+            QGestureEvent *gEvent = static_cast<QGestureEvent*>(event);
+            if (QTapAndHoldGesture *heldTap = static_cast<QTapAndHoldGesture*>(gEvent->gesture(Qt::TapAndHoldGesture))) {
+                if (heldTap->state() == Qt::GestureFinished) {
+                    QPushButton *btn = dynamic_cast<QPushButton*>(obj);
+                    if (btn) {
+                        // user clicked and held a widget, send it a simulated ContextMenuEvent:
+                        QContextMenuEvent ce(QContextMenuEvent::Mouse, heldTap->position().toPoint(),
+                            heldTap->hotSpot().toPoint());
+                        gEvent->accept();
+                        int ret = QCoreApplication::sendEvent(btn, &ce);
+                        btn->setDown(false);
+                        return ret;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    QActionGroup *m_contextActions;
+    PatchReviewPlugin *m_prPlugin;
+    QAction *m_defaultContextAction;
+};
 
 class PatchFilesModel : public VcsFileChangesModel
 {
@@ -127,6 +202,12 @@ void PatchReviewToolView::startingNewReview()
 }
 
 void PatchReviewToolView::patchChanged() {
+    if(m_resetCheckedUrls) {
+        // set the default number of context lines
+        m_editPatch.diffContext->setValue(3);
+        m_diffContextMenu->m_defaultContextAction->setChecked(true);
+    }
+
     fillEditFromPatch();
     kompareModelChanged();
 
@@ -136,7 +217,8 @@ void PatchReviewToolView::patchChanged() {
         m_exportMenu->model()->setInputData(QJsonObject {
             { QStringLiteral("urls"), QJsonArray { p->file().toString() } },
             { QStringLiteral("mimeType"), { QStringLiteral("text/x-patch") } },
-            { QStringLiteral("localBaseDir"), { p->baseDir().toString() } }
+            { QStringLiteral("localBaseDir"), { p->baseDir().toString() } },
+            { QStringLiteral("updateComment"), { QStringLiteral("patch updated through KDevelop's patchreview plugin") } }
         });
     }
 #endif
@@ -226,6 +308,7 @@ void PatchReviewToolView::showEditDialog() {
 #ifdef WITH_PURPOSE
     m_exportMenu = new Purpose::Menu(this);
     connect(m_exportMenu, &Purpose::Menu::finished, this, [](const QJsonObject &output, int error, const QString &message) {
+        qWarning() << Q_FUNC_INFO << "Purpose finished with output" << output << "error=" << error;
         if (error==0) {
             KMessageBox::information(nullptr, i18n("<qt>You can find the new request at:<br /><a href='%1'>%1</a> </qt>", output["url"].toString()),
                                     QString(), QString(), KMessageBox::AllowLink);
@@ -251,6 +334,16 @@ void PatchReviewToolView::showEditDialog() {
     //connect( this, SIGNAL(finished(int)), this, SLOT(slotEditDialogFinished(int)) );
 
     connect( m_editPatch.updateButton, &QPushButton::clicked, m_plugin, &PatchReviewPlugin::forceUpdate );
+    m_editPatch.updateButton->setContextMenuPolicy(Qt::ActionsContextMenu);
+    m_diffContextMenu = new DiffContextMenu(m_plugin);
+    m_editPatch.updateButton->addActions(m_diffContextMenu->m_contextActions->actions());
+    // make it possible to open the context menu with a click-and-hold:
+    m_editPatch.updateButton->installEventFilter(m_diffContextMenu);
+    m_editPatch.updateButton->grabGesture(Qt::TapAndHoldGesture);
+    // FIXME: cleanup after deciding on the GUI
+    m_editPatch.diffContext->hide();
+//     connect( m_editPatch.diffContext, static_cast<void(QSpinBox::*)(int)>(&QSpinBox::valueChanged),
+//              m_plugin, &PatchReviewPlugin::forceUpdateWithContext );
 
     connect( m_editPatch.testsButton, &QPushButton::clicked, this, &PatchReviewToolView::runTests );
 

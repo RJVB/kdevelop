@@ -162,7 +162,7 @@ Path::List CMakeCommitChangesJob::addProjectData(const CMakeProjectData& data)
     QString dir = m_path.toLocalFile();
     if(data.vm.value("CMAKE_INCLUDE_CURRENT_DIR")==QStringList("ON")) {
         m_directories += dir;
-        m_directories += CMakeParserUtils::binaryPath(dir, m_project->path().toLocalFile(), CMake::currentBuildDir(m_project).toLocalFile(QUrl::RemoveTrailingSlash));
+        m_directories += CMakeParserUtils::binaryPath(dir, m_project->path().toLocalFile(), CMake::currentCanonicalBuildDir(m_project).toLocalFile(QUrl::RemoveTrailingSlash));
     }
     m_directories += resolvePaths(m_path, data.properties[DirectoryProperty][dir]["INCLUDE_DIRECTORIES"]);
     m_directories.removeAll(QString());

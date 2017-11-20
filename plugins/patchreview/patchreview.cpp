@@ -224,6 +224,17 @@ void PatchReviewPlugin::forceUpdate() {
     }
 }
 
+void PatchReviewPlugin::forceUpdateWithContext(int contextLines) {
+    if( m_patch ) {
+        // register the requested number of lines of context
+        // and regenerate the patch.
+        m_patch->setContextLines(contextLines);
+        forceUpdate();
+    } else {
+        qWarning() << Q_FUNC_INFO << "called while m_patch==" << m_patch;
+     }
+}
+ 
 void PatchReviewPlugin::updateKompareModel() {
     if ( !m_patch ) {
         ///TODO: this method should be cleaned up, it can be called by the timer and
@@ -385,6 +396,7 @@ void PatchReviewPlugin::closeReview()
                 ICore::self()->uiController()->switchToArea( QStringLiteral("code"), KDevelop::IUiController::ThisWindow );
         }
     }
+    m_active =false;
 }
 
 void PatchReviewPlugin::cancelReview() {
@@ -404,6 +416,7 @@ void PatchReviewPlugin::startReview( IPatchSource* patch, IPatchReview::ReviewMo
     Q_UNUSED( mode );
     emit startingNewReview();
     setPatch( patch );
+    m_active = true;
     QMetaObject::invokeMethod( this, "updateReview", Qt::QueuedConnection );
 }
 
@@ -491,10 +504,18 @@ void PatchReviewPlugin::setPatch( IPatchSource* patch ) {
 
     if( m_patch ) {
         disconnect( m_patch.data(), &IPatchSource::patchChanged, this, &PatchReviewPlugin::notifyPatchChanged );
-        if ( qobject_cast<LocalPatchSource*>( m_patch ) ) {
+        if ( qobject_cast<LocalPatchSource*>( m_patch )
+            || qobject_cast<VCSDiffPatchSource*>( m_patch ) ) {
             // make sure we don't leak this
             // TODO: what about other patch sources?
+            IDocument* patchDocument = ICore::self()->documentController()->documentForUrl( m_patch->file() );
+            if (patchDocument) {
+                // it certainly shouldn't hurt to close the diff document now instead of at some later point.
+                patchDocument->close(IDocument::Discard);
+            }
             m_patch->deleteLater();
+        } else {
+            qCWarning(PLUGIN_PATCHREVIEW) << "LEAKING" << m_patch << m_patch->name() << m_patch->file();
         }
     }
     m_patch = patch;
@@ -515,7 +536,8 @@ void PatchReviewPlugin::setPatch( IPatchSource* patch ) {
 
 PatchReviewPlugin::PatchReviewPlugin( QObject *parent, const QVariantList & )
     : KDevelop::IPlugin( QStringLiteral("kdevpatchreview"), parent ),
-    m_patch( nullptr ), m_factory( new PatchReviewToolViewFactory( this ) )
+    m_patch( nullptr ), m_factory( new PatchReviewToolViewFactory( this ) ),
+    m_active( false)
 {
     qRegisterMetaType<const Diff2::DiffModel*>( "const Diff2::DiffModel*" );
 
@@ -545,7 +567,9 @@ PatchReviewPlugin::PatchReviewPlugin( QObject *parent, const QVariantList & )
 }
 
 void PatchReviewPlugin::documentClosed( IDocument* doc ) {
-    removeHighlighting( doc->url() );
+    if (m_active) {
+        removeHighlighting( doc->url() );
+    }
 }
 
 void PatchReviewPlugin::documentSaved( IDocument* doc ) {
@@ -555,12 +579,12 @@ void PatchReviewPlugin::documentSaved( IDocument* doc ) {
     // Also, don't automatically update local patch sources, because
     // they may correspond to static files which don't match any more
     // after an edit was done.
-    if( m_patch && doc->url() != m_patch->file() && !dynamic_cast<LocalPatchSource*>(m_patch.data()) )
+    if( m_active && m_patch && doc->url() != m_patch->file() && !dynamic_cast<LocalPatchSource*>(m_patch.data()) )
         forceUpdate();
 }
 
 void PatchReviewPlugin::textDocumentCreated( IDocument* doc ) {
-    if (m_patch) {
+    if (m_active && m_patch) {
         addHighlighting( doc->url(), doc );
     }
 }
@@ -599,6 +623,9 @@ KDevelop::ContextMenuExtension PatchReviewPlugin::contextMenuExtension(KDevelop:
         urls << econtext->url();
     }
 
+#ifndef Q_OS_MACOS
+    // don't on Mac for now, using the git/show_diffs or git/commit actions after using this 
+    // cause a crash.
     if (urls.size() == 1) {
         QAction* reviewAction = new QAction( QIcon::fromTheme(QStringLiteral("text-x-patch")),
                                              i18n("Review Patch"), parent);
@@ -608,6 +635,7 @@ KDevelop::ContextMenuExtension PatchReviewPlugin::contextMenuExtension(KDevelop:
         cm.addAction( KDevelop::ContextMenuExtension::VcsGroup, reviewAction );
         return cm;
     }
+#endif
 
     return KDevelop::IPlugin::contextMenuExtension(context, parent);
 }

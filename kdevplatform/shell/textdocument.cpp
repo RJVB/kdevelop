@@ -262,7 +262,7 @@ bool TextDocument::isTextDocument() const
     {
         /// @todo Somehow it can happen that d->document is zero, which makes
         /// code relying on "isTextDocument() == (bool)textDocument()" crash
-        qCWarning(SHELL) << "Broken text-document: " << url();
+        qCDebug(SHELL) << "Broken text-document: " << url();
         return false;
     }
 
@@ -724,6 +724,7 @@ void KDevelop::TextDocument::populateContextMenu( KTextEditor::View* v, QMenu* m
     foreach ( QAction* action, d->m_addedContextMenu->actions() ) {
         menu->addAction(action);
     }
+    menu->setTearOffEnabled(true);
 }
 
 void KDevelop::TextDocument::repositoryCheckFinished(bool canRecreate) {
