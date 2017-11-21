@@ -10,7 +10,9 @@ if(NOT WIN32)
     # TODO: Make compile under Windows
     add_subdirectory(debuggercommon)
     add_subdirectory(lldb)
-    add_subdirectory(gdb)
+    if(NOT APPLE)
+        add_subdirectory(gdb)
+    endif()
 endif()
 # END: Debuggers
 
