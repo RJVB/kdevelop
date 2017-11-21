@@ -65,6 +65,7 @@ public:
      * The method should trigger the external browser and return true in that case,
      * or otherwise return false. When using an external browser the documentation
      * toolview is not sollicited at all (i.e. it will not open nor be added to a toolbar).
+     * TODO: remove implementation
      */
     virtual bool viewInExternalBrowser() { return false; }
 
