@@ -16,7 +16,7 @@ include(KDevPlatformMacros)
 include(KDevPlatformMacrosInternal)
 
 if (NOT KDEVELOP_BUILD_IDE)
-    # We cannot include this subdirectory because the clang plugin
+    # We cannot exclude this subdirectory because the clang plugin
     # depends on certain of the library targets defined below.
     # But we can reduce the build time and disk space overhead
     # for items that won't be installed. We could disable LTO too
