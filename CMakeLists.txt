@@ -179,15 +179,15 @@ if (KDEVELOP_BUILD_IDE)
 endif()
 
 set(CMAKECONFIG_INSTALL_DIR "${KDE_INSTALL_CMAKEPACKAGEDIR}/KDevelop")
+ecm_setup_version(${KDevelop_VERSION_MAJOR}.${KDevelop_VERSION_MINOR}.${KDevelop_VERSION_PATCH}
+                  VARIABLE_PREFIX KDEVELOP
+                  VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/kdevelop_version.h"
+                  PACKAGE_VERSION_FILE "${CMAKE_CURRENT_BINARY_DIR}/KDevelopConfigVersion.cmake"
+)
 if (KDEVELOP_BUILD_IDE)
     configure_package_config_file("${CMAKE_CURRENT_SOURCE_DIR}/KDevelopConfig.cmake.in"
                                       "${CMAKE_CURRENT_BINARY_DIR}/KDevelopConfig.cmake"
                                       INSTALL_DESTINATION ${CMAKECONFIG_INSTALL_DIR}
-    )
-    ecm_setup_version(${KDevelop_VERSION_MAJOR}.${KDevelop_VERSION_MINOR}.${KDevelop_VERSION_PATCH}
-                      VARIABLE_PREFIX KDEVELOP
-                      VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/kdevelop_version.h"
-                      PACKAGE_VERSION_FILE "${CMAKE_CURRENT_BINARY_DIR}/KDevelopConfigVersion.cmake"
     )
     install(FILES
             "${CMAKE_CURRENT_BINARY_DIR}/kdevelop_version.h"
