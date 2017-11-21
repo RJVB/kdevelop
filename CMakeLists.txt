@@ -8,18 +8,8 @@ set(KDEVELOP_SOVERSION 52)
 # plugin versions listed in the .desktop files
 set(KDEV_PLUGIN_VERSION 30)
 
-if(APPLE OR WIN32)
-    option(KDEVELOP_NATIVE_DIALOGS "Use native file dialogs instead of KDE dialogs" ON)
-else()
-    option(KDEVELOP_NATIVE_DIALOGS "Use native file dialogs instead of KDE dialogs" OFF)
-endif()
-
 option(KDEVELOP_BUILD_IDE "Build the IDE" ON)
 option(KDEVELOP_BUILD_CLANG_PARSER "Build the Clang-based C/C++ parser (formerly kdev-clang)" ON)
-
-if ((NOT KDEVELOP_BUILD_IDE) AND (NOT KDEVELOP_BUILD_CLANG_PARSER))
-    message(FATAL_ERROR "KDEVELOP_BUILD_IDE and KDEVELOP_BUILD_CLANG_PARSER cannot both be OFF!")
-endif()
 
 if(APPLE OR WIN32)
     option(KDEVELOP_NATIVE_DIALOGS "Use native file dialogs instead of KDE dialogs" ON)
@@ -30,6 +20,10 @@ endif()
 # we need some parts of the ECM CMake helpers
 find_package (ECM 5.14.0 REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${KDevelop_SOURCE_DIR}/cmake/modules ${ECM_MODULE_PATH})
+
+if ((NOT KDEVELOP_BUILD_IDE) AND (NOT KDEVELOP_BUILD_CLANG_PARSER))
+    message(FATAL_ERROR "KDEVELOP_BUILD_IDE and KDEVELOP_BUILD_CLANG_PARSER cannot both be OFF!")
+endif()
 
 include(KDECompilerSettings NO_POLICY_SCOPE) # needs to be first, as set policies influence following macros
 include(ECMOptionalAddSubdirectory)
@@ -105,6 +99,10 @@ add_definitions(
     -DQT_STRICT_ITERATORS
     -DQT_USE_QSTRINGBUILDER
 )
+
+if(KDEVELOP_NATIVE_DIALOGS)
+    add_definitions(-DKDEV_USE_NATIVE_DIALOGS)
+endif()
 
 function(add_compile_flag_if_supported _flag)
     unset(_have_flag CACHE)
