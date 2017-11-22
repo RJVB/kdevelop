@@ -1405,6 +1405,16 @@ class ItemRepository : public AbstractItemRepository {
 
     //Make sure the index was reachable through the hash chain
     Q_ASSERT(bucketPtr);
+    if (!bucketPtr) {
+        qWarning() << Q_FUNC_INFO << "index" << index
+            << "not reachable through hash chain; previous bucket="
+            << previousBucketPtr << "next="
+            << (previousBucketPtr ? previousBucketPtr->nextBucketForHash(hash) : 0);
+        if (previousBucketPtr) {
+            previousBucketPtr->setNextBucketForHash(hash, 0);
+        }
+        return;
+    }
 
     --m_statItemCount;
 
