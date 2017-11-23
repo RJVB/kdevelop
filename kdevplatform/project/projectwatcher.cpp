@@ -23,20 +23,26 @@
 #include "projectfiltermanager.h"
 #include "path.h"
 
+#include <QApplication>
+
 #include <KDirWatch>
 
 using namespace KDevelop;
 
-KDevelop::ProjectWatcher::ProjectWatcher(IProject* project, ProjectFilterManager* filter)
+KDevelop::ProjectWatcher::ProjectWatcher(IProject* project)
     : KDirWatch(project)
-    , m_project(project)
-    , m_filter(filter)
     , m_watchedCount(0)
-{}
+{
+    if (QCoreApplication::instance()) {
+        // stop monitoring project directories when the IDE is about to quit
+        // triggering a full project reload just before closing would be counterproductive.
+        connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this, &KDirWatch::stopScan);
+    }
+}
 
 void KDevelop::ProjectWatcher::addDir(const QString& path, WatchModes watchModes)
 {
-    if (/*m_filter->isValid(Path(path), true, m_project) &&*/ !contains(path)) {
+    if (!contains(path)) {
         KDirWatch::addDir(path, watchModes);
         m_watchedCount += 1;
     }

@@ -151,8 +151,8 @@ KIO::Job* AbstractFileManagerPluginPrivate::eventuallyReadFolder(ProjectFolderIt
                 q, [&] (FileManagerListJob* job, ProjectFolderItem* baseItem, const KIO::UDSEntryList& entries) {
                     addJobItems(job, baseItem, entries); } );
     q->connect( listJob, &FileManagerListJob::watchDir,
-                q, [item, watcher] (const QString& path) {
-                    watcher->addDir(path); }/*, Qt::QueuedConnection*/ );
+                watcher, [watcher] (const QString& path) {
+                    watcher->addDir(path); } );
 
     return listJob;
 }
@@ -483,7 +483,7 @@ ProjectFolderItem *AbstractFileManagerPlugin::import( IProject *project )
 
     ///TODO: check if this works for remote files when something gets changed through another KDE app
     if ( project->path().isLocalFile() ) {
-        auto watcher = new ProjectWatcher(project, &d->m_filters);
+        auto watcher = new ProjectWatcher(project);
 
         // set up the signal handling; feeding the dirwatcher is handled by FileManagerListJob.
         connect(watcher, &KDirWatch::dirty,

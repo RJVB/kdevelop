@@ -35,14 +35,14 @@ class KDEVPLATFORMPROJECT_EXPORT ProjectWatcher : public KDirWatch
     Q_OBJECT
 public:
     /**
-     * Create a dirwatcher for @p project based on KDirWatch and
-     * enhanced with support for the project @p filter.
+     * Create a dirwatcher for @p project based on KDirWatch but
+     * that will add or remove each directory only once.
      */
-    explicit ProjectWatcher(IProject* project, ProjectFilterManager* filter);
+    explicit ProjectWatcher(IProject* project);
 
     /**
      * Add directory @p path to the project dirwatcher if it is not
-     * rejected by the project filter.
+     * already being watched.
      */
     void addDir(const QString& path, WatchModes watchModes = WatchDirOnly);
     void removeDir(const QString& path);
@@ -53,8 +53,6 @@ public:
     int size() const;
 
 private:
-    IProject* m_project;
-    ProjectFilterManager* m_filter;
     int m_watchedCount;
 };
 
