@@ -340,7 +340,7 @@ public:
 
         Project* project = new Project();
         // TEMPORARY: initialise project load timer
-        if (qEnvironmentVariableIsSet("KDEV_DONT_DEFER_PROJECT_PARSING")) {
+        if (qEnvironmentVariableIsSet("KDEV_PROJECT_DONT_DEFER_PARSING")) {
             m_timers[project] = new QElapsedTimer;
             m_timers[project]->start();
         }
@@ -920,7 +920,7 @@ void ProjectController::projectImportingFinished( IProject* project )
     // projects have been imported. Parsing is done in the background but
     // importing can block the UI so should be as fast as possible.
     // TEMPORARY: deferFinalise
-    bool deferFinalise = !qEnvironmentVariableIsSet("KDEV_DONT_DEFER_PROJECT_WATCHING_AND_PARSING");
+    bool deferFinalise = !qEnvironmentVariableIsSet("KDEV_PROJECT_DONT_DEFER_PARSING");
     if (d->m_currentlyOpening.isEmpty()) {
         if (deferFinalise) {
             qCInfo(SHELL) << "All projects imported in" << ProjectControllerPrivate::m_timer.restart() / 1000.0 << "seconds";
