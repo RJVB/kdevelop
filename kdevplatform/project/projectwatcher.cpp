@@ -24,6 +24,7 @@
 #include "path.h"
 
 #include <QApplication>
+#include <QDebug>
 
 #include <KDirWatch>
 
@@ -52,6 +53,23 @@ void KDevelop::ProjectWatcher::removeDir(const QString& path)
 {
     if (contains(path)) {
         KDirWatch::removeDir(path);
+        m_watchedCount -= 1;
+    }
+}
+
+void KDevelop::ProjectWatcher::addFile(const QString& file)
+{
+    if (!contains(file)) {
+        qWarning() << "KDW::addFile" << file;
+        KDirWatch::addFile(file);
+        m_watchedCount += 1;
+    }
+}
+
+void KDevelop::ProjectWatcher::removeFile(const QString& file)
+{
+    if (contains(file)) {
+        KDirWatch::removeFile(file);
         m_watchedCount -= 1;
     }
 }

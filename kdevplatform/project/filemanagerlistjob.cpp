@@ -27,11 +27,13 @@
 
 #include <QtConcurrentRun>
 #include <QDir>
+#include <QTimer>
 
 using namespace KDevelop;
 
 FileManagerListJob::FileManagerListJob(ProjectFolderItem* item)
-    : KIO::Job(), m_item(item), m_aborted(false)
+    : KIO::Job(), m_item(item), m_baseItem(item), m_aborted(false)
+    , m_emitWatchDir(!qEnvironmentVariableIsSet("KDEV_PROJECT_INTREE_DIRWATCHING_MODE"))
 {
     qRegisterMetaType<KIO::UDSEntryList>("KIO::UDSEntryList");
     qRegisterMetaType<KIO::Job*>();
@@ -52,6 +54,16 @@ FileManagerListJob::FileManagerListJob(ProjectFolderItem* item)
 ProjectFolderItem* FileManagerListJob::item() const
 {
     return m_item;
+}
+
+QQueue<ProjectFolderItem*> FileManagerListJob::itemQueue() const
+{
+    return m_listQueue;
+}
+
+ProjectFolderItem* FileManagerListJob::baseItem() const
+{
+    return m_baseItem;
 }
 
 void FileManagerListJob::addSubDir( ProjectFolderItem* item )
@@ -95,8 +107,10 @@ void FileManagerListJob::startNextJob()
             if (m_aborted) {
                 return;
             }
-            // signal that this directory has to be watched
-            emit watchDir(path.toLocalFile());
+            if (m_emitWatchDir) {
+                // signal that this directory has to be watched
+                emit watchDir(path.toLocalFile());
+            }
             KIO::UDSEntryList results;
             std::transform(entries.begin(), entries.end(), std::back_inserter(results), [] (const QFileInfo& info) -> KIO::UDSEntry {
                 KIO::UDSEntry entry;
@@ -166,13 +180,23 @@ void FileManagerListJob::handleResults(const KIO::UDSEntryList& entriesIn)
 void FileManagerListJob::abort()
 {
     m_aborted = true;
+    m_listQueue.clear();
 
     bool killed = kill();
+    m_killCount += 1;
+    if (!killed) {
+        qCWarning(PROJECT) << "failed to kill" << this << "kill count=" << m_killCount;
+    }
     Q_ASSERT(killed);
     Q_UNUSED(killed);
 }
 
+void FileManagerListJob::start(int msDelay)
+{
+    QTimer::singleShot(msDelay, this, SLOT(startNextJob()));
+}
+
 void FileManagerListJob::start()
 {
-    startNextJob();
+    start(0);
 }

@@ -41,12 +41,15 @@ class FileManagerListJob : public KIO::Job
 public:
     explicit FileManagerListJob(ProjectFolderItem* item);
     ProjectFolderItem* item() const;
+    QQueue<ProjectFolderItem*> itemQueue() const;
+    ProjectFolderItem* baseItem() const;
 
     void addSubDir(ProjectFolderItem* item);
     void removeSubDir(ProjectFolderItem* item);
 
     void abort();
     void start() override;
+    void start(int msDelay);
 
 Q_SIGNALS:
     void entries(FileManagerListJob* job, ProjectFolderItem* baseItem,
@@ -65,6 +68,8 @@ private:
     QQueue<ProjectFolderItem*> m_listQueue;
     /// current base dir
     ProjectFolderItem* m_item;
+    /// entrypoint
+    ProjectFolderItem* m_baseItem;
     KIO::UDSEntryList entryList;
     // kill does not delete the job instantaniously
     QAtomicInt m_aborted;
@@ -74,6 +79,8 @@ private:
     QElapsedTimer m_subTimer;
     qint64 m_subWaited = 0;
 #endif
+    bool m_emitWatchDir;
+    int m_killCount = 0;
 };
 
 }

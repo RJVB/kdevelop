@@ -46,6 +46,12 @@ public:
      */
     void addDir(const QString& path, WatchModes watchModes = WatchDirOnly);
     void removeDir(const QString& path);
+    /**
+     * Add file @p file to the project dirwatcher if it is not
+     * already being watched.
+     */
+    void addFile(const QString& file);
+    void removeFile(const QString& file);
 
     /**
      * return the current number of directories being watched.
