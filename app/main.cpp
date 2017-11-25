@@ -65,6 +65,7 @@
 #include <interfaces/iproject.h>
 #include <interfaces/launchconfigurationtype.h>
 #include <util/path.h>
+#include <util/environmentprofilelist.h>
 #include <debug.h>
 
 #include "kdevideextension.h"
@@ -82,7 +83,7 @@
 #endif
 
 using namespace KDevelop;
-struct UrlInfo;
+class UrlInfo;
 
 namespace {
 
@@ -131,6 +132,23 @@ public:
             Q_UNUSED(GUIenabled);
 #endif
             connect(this, &QGuiApplication::saveStateRequest, this, &KDevelopApplication::saveState);
+
+            const KDevelop::EnvironmentProfileList environmentProfiles(KSharedConfig::openConfig());
+            const QString envProfileName = environmentProfiles.defaultProfileName();
+            QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+            auto userEnv = environmentProfiles.variables(envProfileName);
+            expandVariables(userEnv, environment);
+            qCDebug(APP) << "Setting default environment profile:" << envProfileName;
+            mergeEnvironment(userEnv);
+        }
+
+        template< typename T >
+        void mergeEnvironment(const T& src)
+        {
+            for( typename T::const_iterator it = src.begin(); it != src.end(); ++it ) {
+                qCDebug(APP) << "setenv" << it.key() << it.value();
+                qputenv( it.key().toLatin1(), it.value().toLatin1() );
+            }
         }
 
 #if KDEVELOP_SINGLE_APP
