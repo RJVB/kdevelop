@@ -29,11 +29,57 @@
 #include <QDir>
 #include <QTimer>
 
+#include <interfaces/icore.h>
+#include <interfaces/iruncontroller.h>
+
 using namespace KDevelop;
+
+class KDevelop::RunControllerProxy : public KJob
+{
+public:
+    RunControllerProxy(FileManagerListJob* proxied)
+        : KJob()
+        , m_proxied(proxied)
+    {
+        setCapabilities(KJob::Killable);
+        setObjectName(proxied->objectName());
+        ICore::self()->runController()->registerJob(this);
+    }
+
+    ~RunControllerProxy()
+    {
+        done();
+    }
+
+    // we don't run anything ourselves
+    void start()
+    {}
+
+    bool doKill()
+    {
+        if (m_proxied) {
+            qCDebug(PROJECT) << "Aborting" << m_proxied;
+            m_proxied->abort();
+            done();
+        }
+        return true;
+    }
+
+    void done()
+    {
+        if (m_proxied) {
+            ICore::self()->runController()->unregisterJob(this);
+            m_proxied = nullptr;
+        }
+    }
+
+    FileManagerListJob* m_proxied;
+};
 
 FileManagerListJob::FileManagerListJob(ProjectFolderItem* item)
     : KIO::Job(), m_item(item), m_baseItem(item), m_aborted(false)
     , m_emitWatchDir(!qEnvironmentVariableIsSet("KDEV_PROJECT_INTREE_DIRWATCHING_MODE"))
+    , m_rcProxy(nullptr)
 {
     qRegisterMetaType<KIO::UDSEntryList>("KIO::UDSEntryList");
     qRegisterMetaType<KIO::Job*>();
@@ -49,6 +95,15 @@ FileManagerListJob::FileManagerListJob(ProjectFolderItem* item)
 #ifdef TIME_IMPORT_JOB
     m_timer.start();
 #endif
+}
+
+FileManagerListJob::~FileManagerListJob()
+{
+    if (m_rcProxy) {
+        m_rcProxy->done();
+        m_rcProxy->deleteLater();
+    }
+    m_rcProxy = nullptr;
 }
 
 ProjectFolderItem* FileManagerListJob::item() const
@@ -168,6 +223,9 @@ void FileManagerListJob::handleResults(const KIO::UDSEntryList& entriesIn)
 
     if( m_listQueue.isEmpty() ) {
         emitResult();
+        if (m_rcProxy) {
+            m_rcProxy->done();
+        }
 
 #ifdef TIME_IMPORT_JOB
         qCDebug(PROJECT) << "TIME FOR LISTJOB:" << m_timer.elapsed();
@@ -182,9 +240,14 @@ void FileManagerListJob::abort()
     m_aborted = true;
     m_listQueue.clear();
 
+    if (m_rcProxy) {
+        m_rcProxy->done();
+    }
+
     bool killed = kill();
     m_killCount += 1;
     if (!killed) {
+        // let's check if kill failures aren't because of trying to kill a corpse
         qCWarning(PROJECT) << "failed to kill" << this << "kill count=" << m_killCount;
     }
     Q_ASSERT(killed);
@@ -193,10 +256,17 @@ void FileManagerListJob::abort()
 
 void FileManagerListJob::start(int msDelay)
 {
-    QTimer::singleShot(msDelay, this, SLOT(startNextJob()));
+    if (msDelay > 0) {
+        QTimer::singleShot(msDelay, this, SLOT(start()));
+    } else {
+        start();
+    }
 }
 
 void FileManagerListJob::start()
 {
-    start(0);
+    if (!m_rcProxy) {
+        m_rcProxy = new RunControllerProxy(this);
+    }
+    startNextJob();
 }

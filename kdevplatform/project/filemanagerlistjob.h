@@ -33,6 +33,7 @@
 namespace KDevelop
 {
     class ProjectFolderItem;
+    class RunControllerProxy;
 
 class FileManagerListJob : public KIO::Job
 {
@@ -40,6 +41,7 @@ class FileManagerListJob : public KIO::Job
 
 public:
     explicit FileManagerListJob(ProjectFolderItem* item);
+    virtual ~FileManagerListJob();
     ProjectFolderItem* item() const;
     QQueue<ProjectFolderItem*> itemQueue() const;
     ProjectFolderItem* baseItem() const;
@@ -81,6 +83,7 @@ private:
 #endif
     bool m_emitWatchDir;
     int m_killCount = 0;
+    RunControllerProxy* m_rcProxy;
 };
 
 }

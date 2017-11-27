@@ -168,31 +168,28 @@ FileManagerListJob* AbstractFileManagerPluginPrivate::eventuallyReadFolder(Proje
     const auto jobList = QList<FileManagerListJob*>(m_projectJobs[item->project()]);
     auto jobListIt = jobList.constEnd();
     auto jobListHead = jobList.constBegin();
+    const auto path = item->path().path();
     while (jobListIt != jobListHead) {
         auto job = *(--jobListIt);
         if (listJob != job) {
-            if (job->baseItem() == item) {
-                qCDebug(FILEMANAGER) << listJob << "aborting old job" << job << "for" << item->path();
+            if (job->baseItem()->path().path().startsWith(path)) {
+                // this job is already reloading @p item or one of its subdirs: abort it
+                // because the new job will provide a more up-to-date representation.
+                qCDebug(FILEMANAGER) << listJob << "aborting old job" << job;
                 job->abort();
                 m_projectJobs[item->project()].removeOne(job);
             } else if (job->itemQueue().contains(item)) {
                 // should we suspend/resume before/after removeSubDir()?
                 job->removeSubDir(item);
-                qCWarning(FILEMANAGER) << listJob << "old job" << job << "unqueueing reload of" << item->path();
+                qCDebug(FILEMANAGER) << listJob << "unqueueing reload of old job" << job << item->path();
             } else if (job->item() == item) {
-                qCWarning(FILEMANAGER) << listJob << "old job" << job << "already reloading" << item->path();
+                qCWarning(FILEMANAGER) << listJob << "old job" << job << "is already reloading" << item->path();
             }
         }
     }
-    q->connect( listJob, &FileManagerListJob::result,
-                q, [&] (KJob* job) {
-                    FileManagerListJob* gmlJob = qobject_cast<FileManagerListJob*>(job);
-                    if (gmlJob) {
-                        qCDebug(FILEMANAGER) << "Job done for item" << gmlJob->baseItem()->path() << gmlJob;
-                    } else {
-                        qCWarning(FILEMANAGER) << "Job done:" << job;
-                    } } );
 
+    // set a relevant name (for listing in the runController)
+    listJob->setObjectName(i18n("Reload of %1:%2", item->project()->name(), item->path().toLocalFile()));
     return listJob;
 }
 
