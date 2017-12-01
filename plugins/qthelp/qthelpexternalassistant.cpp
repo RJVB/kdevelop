@@ -69,10 +69,22 @@ QtHelpExternalAssistant::~QtHelpExternalAssistant()
 void QtHelpExternalAssistant::externalViewerExit(int exitCode, QProcess::ExitStatus exitStatus)
 {
     if (this == s_self) {
-        qCDebug(QTHELP) << "externalViewer" << this << "has exited with code"
-            << exitCode << "and status" << exitStatus;
-        deleteLater();
-        m_externalViewerProcess = nullptr;
+        if (!m_externalViewerProcess) {
+            qCCritical(QTHELP) << "exit notification for inexistant viewer process, this shouldn't happen!";
+        } else {
+            if (exitStatus == QProcess::ExitStatus::NormalExit) {
+                qCDebug(QTHELP) << "externalViewer" << m_externalViewerProcess << "has exited";
+            } else {
+                qCWarning(QTHELP) << "externalViewer" << m_externalViewerProcess << "has exited with code"
+                    << exitCode << "and status" << exitStatus << m_externalViewerProcess->errorString();
+            }
+            // TODO: shouldn't this be m_externalViewerProcess->deleteLater() ??
+            m_externalViewerProcess->deleteLater();
+            m_externalViewerProcess = nullptr;
+        }
+    } else {
+        qCCritical(QTHELP) << "externalViewerExit called for the wrong QtHelpExternalAssistant instance (forwarding)";
+        s_self->externalViewerExit(exitCode, exitStatus);
     }
 }
 
@@ -137,9 +149,7 @@ QtHelpExternalAssistant* QtHelpExternalAssistant::self()
     }
 
     if (!s_self) {
-        if (!s_self) {
-            s_self = new QtHelpExternalAssistant(qApp);
-        }
+        s_self = new QtHelpExternalAssistant(qApp);
     }
     return s_self;
 }
@@ -160,8 +170,11 @@ bool QtHelpExternalAssistant::openUrl(const QUrl& url)
             QStringList args = {"-enableRemoteControl"};
             s_self->m_externalViewerProcess->start(path, args, QIODevice::WriteOnly|QIODevice::Append);
             if (!s_self->m_externalViewerProcess->waitForStarted()) {
+                qCWarning(QTHELP) << "failure starting" << path << ":" << s_self->m_externalViewerProcess->errorString();
                 s_self->m_externalViewerProcess->deleteLater();
                 s_self->m_externalViewerProcess = nullptr;
+            } else {
+                s_self->m_externalViewerProcess->setObjectName(path);
             }
         }
         const QByteArray command = QByteArrayLiteral("setSource ")
