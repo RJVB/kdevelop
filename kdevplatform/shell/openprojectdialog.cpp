@@ -308,7 +308,16 @@ void OpenProjectDialog::openPageAccepted()
 
 void OpenProjectDialog::validateProjectName( const QString& name )
 {
-    m_projectName = name;
+    if (name != m_projectName) {
+        m_projectName = name;
+        QUrl url(m_url.adjusted(QUrl::StripTrailingSlash | QUrl::RemoveFilename));
+        // construct a version of the project name that's safe for use as a filename:
+        // TODO: do an additional replace of QDir::separator() with "@"?
+        QString safeName = m_projectName.replace(QRegExp("[\\\\/]"), QStringLiteral("@"));
+        url.setPath(url.path() + '/' + safeName + '.' + ShellExtension::getInstance()->projectFileExtension());
+        m_urlIsDirectory = false;
+        m_url.setPath(url.path());
+    }
     validateProjectInfo();
 }
 

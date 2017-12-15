@@ -446,7 +446,8 @@ QUrl ProjectDialogProvider::askProjectConfigLocation(bool fetch, const QUrl& sta
     }
 
     QUrl projectFileUrl = dlg->projectFileUrl();
-    qCDebug(SHELL) << "selected project:" << projectFileUrl << dlg->projectName() << dlg->projectManager();
+    qCDebug(SHELL) << "selected project:" << projectFileUrl << "selectedUrl=" << dlg->selectedUrl()
+        << "projectName=" << dlg->projectName() << "projectManager=" << dlg->projectManager();
     if ( dlg->projectManager() == QLatin1String("<built-in>") ) {
         return projectFileUrl;
     }
@@ -456,8 +457,9 @@ QUrl ProjectDialogProvider::askProjectConfigLocation(bool fetch, const QUrl& sta
     if( projectFileExists( projectFileUrl ) )
     {
         // check whether config is equal
-        bool shouldAsk = true;
-        if( projectFileUrl == dlg->selectedUrl() )
+        bool isKDevProject = QFileInfo(projectFileUrl.url()).completeSuffix() == QStringLiteral("kdev4");
+        bool shouldAsk = !isKDevProject;
+        if( !isKDevProject && projectFileUrl == dlg->selectedUrl() )
         {
             if( projectFileUrl.isLocalFile() )
             {
