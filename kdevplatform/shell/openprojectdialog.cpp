@@ -88,8 +88,10 @@ OpenProjectDialog::OpenProjectDialog(bool fetch, const QUrl& startUrl,
     }
 
 #ifndef KDEV_USE_NATIVE_DIALOGS
+    // user selected KDE file dialogs via the CMake option
     const bool useKdeFileDialog = true;
 #else
+    // user selected native file dialogs via the CMake option
     const bool useKdeFileDialog = false;
 #endif
     QStringList filters, allEntry;
@@ -314,9 +316,12 @@ void OpenProjectDialog::validateProjectName( const QString& name )
         // construct a version of the project name that's safe for use as a filename:
         // TODO: do an additional replace of QDir::separator() with "@"?
         QString safeName = m_projectName.replace(QRegExp("[\\\\/]"), QStringLiteral("@"));
-        url.setPath(url.path() + '/' + safeName + '.' + ShellExtension::getInstance()->projectFileExtension());
+        safeName = safeName.replace(QChar(':'), QChar('='));
+        safeName = safeName.replace(QRegExp("\\s"), QStringLiteral("_"));
+        safeName += '.' + ShellExtension::getInstance()->projectFileExtension();
+        m_url.setPath(url.path() + '/' + safeName);
         m_urlIsDirectory = false;
-        m_url.setPath(url.path());
+        qCDebug(SHELL) << "project name:" << m_projectName << "file name:" << safeName;
     }
     validateProjectInfo();
 }
