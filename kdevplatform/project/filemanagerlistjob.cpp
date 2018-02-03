@@ -103,6 +103,7 @@ FileManagerListJob::~FileManagerListJob()
         m_rcProxy->done();
         m_rcProxy->deleteLater();
     }
+    m_item = m_baseItem = nullptr;
     m_rcProxy = nullptr;
 }
 
@@ -222,6 +223,7 @@ void FileManagerListJob::handleResults(const KIO::UDSEntryList& entriesIn)
     emit entries(this, m_item, entriesIn);
 
     if( m_listQueue.isEmpty() ) {
+        m_baseItem = nullptr;
         emitResult();
         if (m_rcProxy) {
             m_rcProxy->done();
@@ -243,6 +245,8 @@ void FileManagerListJob::abort()
     if (m_rcProxy) {
         m_rcProxy->done();
     }
+
+    m_baseItem = nullptr;
 
     bool killed = kill();
     m_killCount += 1;

@@ -171,7 +171,8 @@ FileManagerListJob* AbstractFileManagerPluginPrivate::eventuallyReadFolder(Proje
     const auto path = item->path().path();
     while (jobListIt != jobListHead) {
         auto job = *(--jobListIt);
-        if (listJob != job) {
+        // check the other jobs that are still running (baseItem() != NULL)
+        if (listJob != job && job->baseItem()) {
             if (job->baseItem()->path().path().startsWith(path)) {
                 // this job is already reloading @p item or one of its subdirs: abort it
                 // because the new job will provide a more up-to-date representation.
