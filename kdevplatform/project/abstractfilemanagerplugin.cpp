@@ -145,6 +145,34 @@ void AbstractFileManagerPluginPrivate::projectClosing(IProject* project)
 FileManagerListJob* AbstractFileManagerPluginPrivate::eventuallyReadFolder(ProjectFolderItem* item)
 {
     ProjectWatcher* watcher = m_watchers.value( item->project(), nullptr );
+
+    // Before we create a new list job it's a good idea to
+    // walk the list backwards, checking for duplicates and aborting
+    // any previously started jobs loading the same directory.
+    const auto jobList = QList<FileManagerListJob*>(m_projectJobs[item->project()]);
+    auto jobListIt = jobList.constEnd();
+    auto jobListHead = jobList.constBegin();
+    const auto path = item->path().path();
+    while (jobListIt != jobListHead) {
+        auto job = *(--jobListIt);
+        // check the other jobs that are still running (baseItem() != NULL)
+        if (job->baseItem()) {
+            if (job->baseItem()->path().path().startsWith(path)) {
+                // this job is already reloading @p item or one of its subdirs: abort it
+                // because the new job will provide a more up-to-date representation.
+                qCDebug(FILEMANAGER) << "aborting old job" << job << "before starting job for" << item->path();
+                job->abort();
+                m_projectJobs[item->project()].removeOne(job);
+            } else if (job->itemQueue().contains(item)) {
+                job->removeSubDir(item);
+                qCDebug(FILEMANAGER) << "unqueueing reload of old job" << job << "before starting one for" << item->path();
+            } else if (job->item() == item) {
+                qCWarning(FILEMANAGER) << "old job" << job << "is already reloading" << item->path();
+                // not much we can do here, we have to return a valid FileManagerListJob.
+            }
+        }
+    }
+
     // FileManagerListJob detects KDEV_PROJECT_INTREE_DIRWATCHING_MODE itself
     // this is safe as long as it's not feasible to change our own env. variables
     FileManagerListJob* listJob = new FileManagerListJob( item );
@@ -161,32 +189,6 @@ FileManagerListJob* AbstractFileManagerPluginPrivate::eventuallyReadFolder(Proje
         q->connect( listJob, &FileManagerListJob::watchDir,
                 watcher, [watcher] (const QString& path) {
                     watcher->addDir(path); } );
-    }
-
-    // walk the list backwards, checking for duplicates and aborting
-    // any previously started jobs loading the same directory.
-    const auto jobList = QList<FileManagerListJob*>(m_projectJobs[item->project()]);
-    auto jobListIt = jobList.constEnd();
-    auto jobListHead = jobList.constBegin();
-    const auto path = item->path().path();
-    while (jobListIt != jobListHead) {
-        auto job = *(--jobListIt);
-        // check the other jobs that are still running (baseItem() != NULL)
-        if (listJob != job && job->baseItem()) {
-            if (job->baseItem()->path().path().startsWith(path)) {
-                // this job is already reloading @p item or one of its subdirs: abort it
-                // because the new job will provide a more up-to-date representation.
-                qCDebug(FILEMANAGER) << listJob << "aborting old job" << job;
-                job->abort();
-                m_projectJobs[item->project()].removeOne(job);
-            } else if (job->itemQueue().contains(item)) {
-                // should we suspend/resume before/after removeSubDir()?
-                job->removeSubDir(item);
-                qCDebug(FILEMANAGER) << listJob << "unqueueing reload of old job" << job << item->path();
-            } else if (job->item() == item) {
-                qCWarning(FILEMANAGER) << listJob << "old job" << job << "is already reloading" << item->path();
-            }
-        }
     }
 
     // set a relevant name (for listing in the runController)

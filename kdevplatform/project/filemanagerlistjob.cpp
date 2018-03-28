@@ -124,6 +124,10 @@ ProjectFolderItem* FileManagerListJob::baseItem() const
 
 void FileManagerListJob::addSubDir( ProjectFolderItem* item )
 {
+    if (m_aborted) {
+        return;
+    }
+
     Q_ASSERT(!m_listQueue.contains(item));
     Q_ASSERT(!m_item || m_item == item || m_item->path().isDirectParentOf(item->path()));
 
@@ -132,6 +136,10 @@ void FileManagerListJob::addSubDir( ProjectFolderItem* item )
 
 void FileManagerListJob::removeSubDir(ProjectFolderItem* item)
 {
+    if (m_aborted) {
+        return;
+    }
+
     m_listQueue.removeAll(item);
 }
 
@@ -179,7 +187,9 @@ void FileManagerListJob::startNextJob()
                 }
                 return entry;
             });
-            QMetaObject::invokeMethod(this, "handleResults", Q_ARG(KIO::UDSEntryList, results));
+            if (!m_aborted) {
+                QMetaObject::invokeMethod(this, "handleResults", Q_ARG(KIO::UDSEntryList, results));
+            }
         }, m_item->path());
     } else {
         KIO::ListJob* job = KIO::listDir( m_item->path().toUrl(), KIO::HideProgressInfo );
