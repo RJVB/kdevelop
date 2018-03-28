@@ -353,7 +353,11 @@ QString findExecutable()
 
 KDevelop::Path currentCMakeExecutable(KDevelop::IProject* project, int builddir)
 {
-    const auto defaultCMakeExecutable = CMakeBuilderSettings::self()->cmakeExecutable().toLocalFile();
+    auto defaultCMakeExecutable = CMakeBuilderSettings::self()->cmakeExecutable().toLocalFile();
+
+    if (!QFileInfo::exists(ICore::self()->runtimeController()->currentRuntime()->pathInHost(KDevelop::Path(defaultCMakeExecutable)).toLocalFile()))
+        defaultCMakeExecutable = CMake::findExecutable();
+
     if (project) {
         // check for "CMake Executable" but for now also "CMake Binary", falling back to the default.
         auto projectCMakeExecutable = readBuildDirParameter( project, Config::Specific::cmakeExecutableKey,
@@ -438,12 +442,12 @@ int currentBuildDirIndex( KDevelop::IProject* project )
     KConfigGroup baseGrp = baseGroup(project);
 
     if ( baseGrp.hasKey( Config::buildDirOverrideIndexKey ) )
-        return baseGrp.readEntry<int>( Config::buildDirOverrideIndexKey, 0 );
+        return baseGrp.readEntry<int>( Config::buildDirOverrideIndexKey, -1 );
 
     else if (baseGrp.hasKey(Config::buildDirIndexKey()))
-        return baseGrp.readEntry<int>( Config::buildDirIndexKey(), 0 );
+        return baseGrp.readEntry<int>( Config::buildDirIndexKey(), -1 );
     else
-        return baseGrp.readEntry<int>( Config::buildDirIndexKey_, 0 ); // backwards compatibility
+        return baseGrp.readEntry<int>( Config::buildDirIndexKey_, -1 ); // backwards compatibility
 }
 
 void setCurrentBuildDirIndex( KDevelop::IProject* project, int buildDirIndex )

@@ -212,6 +212,10 @@ public:
         }
 
         if(m_declaration->isFunctionDeclaration()) {
+            const auto functionType = m_declaration->type<FunctionType>();
+            if (!functionType)
+                return;
+
             auto doc = view->document();
 
             // Function pointer?
@@ -234,14 +238,13 @@ public:
                 didAddParentheses = true;
             }
             view->document()->replaceText(word, repl);
-            auto f = m_declaration->type<FunctionType>();
-            if (f && f->indexedArgumentsSize() && didAddParentheses) {
+            if (functionType->indexedArgumentsSize() && didAddParentheses) {
                 view->setCursorPosition(word.start() + KTextEditor::Cursor(0, repl.size() - 1));
             }
-            auto returnTypeIntegral = f->returnType().cast<IntegralType>();
+            auto returnTypeIntegral = functionType->returnType().cast<IntegralType>();
             if ( restEmpty && !funcptr && returnTypeIntegral && returnTypeIntegral->dataType() == IntegralType::TypeVoid ) {
                 // function returns void and rest of line is empty -- nothing can be done with the result
-                if ( f && f->indexedArgumentsSize() ) {
+                if (functionType->indexedArgumentsSize() ) {
                     // we placed the cursor inside the ()
                     view->document()->insertText(view->cursorPosition() + KTextEditor::Cursor(0, 1), QStringLiteral(";"));
                 }
@@ -1029,7 +1032,7 @@ QList<CompletionTreeItemPointer> ClangCodeCompletionContext::completionItems(boo
                 switch (kind) {
                 case CXCompletionChunk_TypedText:
                     typed = string;
-                    replacement = string;
+                    replacement += string;
                     break;
                 case CXCompletionChunk_ResultType:
                     resultType = string;
@@ -1056,6 +1059,9 @@ QList<CompletionTreeItemPointer> ClangCodeCompletionContext::completionItems(boo
 #if CINDEX_VERSION_MINOR >= 30
                     if (result.CursorKind == CXCursor_OverloadCandidate) {
                         typed += string;
+                    }
+                    else if (result.CursorKind == CXCursor_EnumConstantDecl) {
+                        replacement += string;
                     }
 #endif
                     break;
