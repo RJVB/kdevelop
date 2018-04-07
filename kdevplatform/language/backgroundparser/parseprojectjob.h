@@ -33,7 +33,7 @@ class KDEVPLATFORMLANGUAGE_EXPORT ParseProjectJob : public KJob
 {
     Q_OBJECT
 public:
-    explicit ParseProjectJob(KDevelop::IProject* project, bool forceUpdate = false );
+    explicit ParseProjectJob(KDevelop::IProject* project, bool forceUpdate = false, bool forceAll = false );
     ~ParseProjectJob() override;
     void start() override;
     bool doKill() override;
@@ -47,6 +47,7 @@ private:
 
 private:
     const QScopedPointer<class ParseProjectJobPrivate> d;
+    bool forceAll;
 };
 
 }
