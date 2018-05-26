@@ -19,7 +19,7 @@ add_executable(clang-minimal-visitor WIN32
 )
 ecm_mark_nongui_executable(clang-minimal-visitor)
 target_link_libraries(clang-minimal-visitor
-    ${CLANG_LIBCLANG_LIB}
+    Clang::clang
 )
 
 ecm_add_test(test_buddies.cpp
@@ -48,7 +48,7 @@ ecm_add_test(test_clangutils.cpp
     LINK_LIBRARIES
         KDev::Tests
         Qt5::Test
-        ${CLANG_LIBCLANG_LIB}
+        Clang::clang
         KDevClangPrivate
 )
 
@@ -102,4 +102,12 @@ if(NOT COMPILER_OPTIMIZATIONS_DISABLED)
             codecompletiontestbase
     )
     set_tests_properties(bench_codecompletion PROPERTIES TIMEOUT 30)
+    ecm_add_test(bench_duchain.cpp
+        TEST_NAME bench_duchain
+        LINK_LIBRARIES
+            KDev::Tests
+            Qt5::Test
+            KDevClangPrivate
+    )
+    set_tests_properties(bench_duchain PROPERTIES TIMEOUT 30)
 endif()
