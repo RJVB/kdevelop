@@ -1,5 +1,5 @@
 /* This is part of KDevelop
-    Copyright 2008 David Nolden <david.nolden.kdevelop@art-master.de>
+   Copyright 2018 R.J.V. Bertin <rjvbertin@gmail.com>
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Library General Public
@@ -21,9 +21,8 @@
 
 #include <QVector>
 #include <QByteArray>
+#include <QFile>
 #include "problem.h"
-
-class QFile;
 
 namespace KDevelop {
 
@@ -33,6 +32,18 @@ class Declaration;
 class IndexedString;
 class IndexedDUContext;
 class DUChainBaseData;
+
+#ifdef KDEV_TOPCONTEXTS_USE_FILES
+using TopDUContextStore = TopDUContextFile;
+#elif defined(KDEV_TOPCONTEXTS_USE_LMDB)
+using TopDUContextStore = TopDUContextLMDB;
+#elif defined(KDEV_TOPCONTEXTS_USE_LEVELDB)
+using TopDUContextStore = TopDUContextLevelDB;
+#elif defined(KDEV_TOPCONTEXTS_USE_KYOTO)
+using TopDUContextStore = TopDUContextKyotoCabinet;
+#else
+class TopDUContextStore;
+#endif
 
 ///This class contains dynamic data of a top-context, and also the repository that contains all the data within this top-context.
 class TopDUContextDynamicData {
@@ -118,6 +129,9 @@ class TopDUContextDynamicData {
     uint position;
   };
 
+  static QString basePath();
+  static QString pathForTopContext(const uint topContextIndex);
+
   private:
     bool hasChanged() const;
 
@@ -153,8 +167,8 @@ class TopDUContextDynamicData {
       void deleteOnDisk();
       bool isItemForIndexLoaded(uint index) const;
 
-      void loadData(QFile* file) const;
-      void writeData(QFile* file);
+      void loadData(TopDUContextStore* file) const;
+      void writeData(TopDUContextStore* file);
 
       //May contain zero items if they were deleted
       mutable QVector<Item> items;
@@ -174,7 +188,7 @@ class TopDUContextDynamicData {
     bool m_onDisk;
     mutable bool m_dataLoaded;
 
-    mutable QFile* m_mappedFile;
+    mutable TopDUContextStore* m_mappedFile;
     mutable uchar* m_mappedData;
     mutable size_t m_mappedDataSize;
     mutable bool m_itemRetrievalForbidden;

@@ -6,6 +6,23 @@ include(CheckSymbolExists)
 check_include_file("malloc.h" HAVE_MALLOC_H)
 check_symbol_exists(malloc_trim "malloc.h" HAVE_MALLOC_TRIM)
 
+include(FindPkgConfig)
+# find LMDB and lmdbxx
+find_path(LMDBXX_INCLUDE_DIRS NAMES "lmdb++.h" HINTS "$ENV{LMDB_DIR}/include")
+find_path(LMDB_INCLUDE_DIRS NAMES "lmdb.h" HINTS "$ENV{LMDB_DIR}/include")
+find_library(LMDB_LIBRARIES NAMES lmdb HINTS $ENV{LMDB_DIR}/lib)
+find_package_handle_standard_args(LMDB DEFAULT_MSG LMDB_INCLUDE_DIRS LMDB_LIBRARIES)
+find_package_handle_standard_args(LMDBXX DEFAULT_MSG LMDBXX_INCLUDE_DIRS)
+pkg_check_modules(PKG_LZ4 liblz4 REQUIRED)
+find_package_handle_standard_args(LZ4 DEFAULT_MSG PKG_LZ4_INCLUDEDIR PKG_LZ4_LIBRARIES)
+# # find LevelDB stuff
+# find_path(LEVELDB_INCLUDE_DIRS NAMES "leveldb" HINTS "$ENV{LEVELDB_DIR}/include")
+# find_library(LEVELDB_LIBRARIES NAMES leveldb HINTS $ENV{LEVELDB_DIR}/lib )
+# find_package_handle_standard_args(LEVELDB DEFAULT_MSG LEVELDB_INCLUDE_DIRS LEVELDB_LIBRARIES)
+# find KyotoCabinet stuff
+# pkg_check_modules(PKG_KYOTOCABINET kyotocabinet REQUIRED)
+# find_package_handle_standard_args(KYOTOCABINET DEFAULT_MSG PKG_KYOTOCABINET_INCLUDEDIR PKG_KYOTOCABINET_LIBRARIES)
+
 if(BUILD_TESTING)
     add_subdirectory(highlighting/tests)
     add_subdirectory(duchain/tests)
@@ -48,6 +65,7 @@ set(KDevPlatformLanguage_LIB_SRCS
     duchain/localindexeddeclaration.cpp
     duchain/topducontext.cpp
     duchain/topducontextdynamicdata.cpp
+    duchain/topducontextdynamicdata_p.cpp
     duchain/topducontextutils.cpp
     duchain/functiondefinition.cpp
     duchain/declaration.cpp
@@ -177,6 +195,10 @@ ki18n_wrap_ui(KDevPlatformLanguage_LIB_SRCS
 
 kdevplatform_add_library(KDevPlatformLanguage SOURCES ${KDevPlatformLanguage_LIB_SRCS})
 target_include_directories(KDevPlatformLanguage PRIVATE ${Boost_INCLUDE_DIRS})
+target_include_directories(KDevPlatformLanguage PRIVATE ${LMDB_INCLUDE_DIRS} ${LMDBXX_INCLUDE_DIRS} ${PKG_LZ4_INCLUDEDIR})
+# target_include_directories(KDevPlatformLanguage PRIVATE ${LEVELDB_INCLUDE_DIRS})
+# target_include_directories(KDevPlatformLanguage PRIVATE ${PKG_KYOTOCABINET_INCLUDEDIR})
+kde_source_files_enable_exceptions(duchain/topducontextdynamicdata_p.cpp)
 target_link_libraries(KDevPlatformLanguage LINK_PUBLIC
         KF5::ThreadWeaver
         KDev::Interfaces
@@ -191,6 +213,9 @@ LINK_PRIVATE
         KDev::Util
         KDev::Project
 )
+target_link_libraries(KDevPlatformLanguage LINK_PRIVATE ${LMDB_LIBRARIES} ${PKG_LZ4_LIBRARIES})
+# target_link_libraries(KDevPlatformLanguage LINK_PRIVATE ${LEVELDB_LIBRARIES})
+# target_link_libraries(KDevPlatformLanguage LINK_PRIVATE ${PKG_KYOTOCABINET_LIBRARIES})
 
 install(FILES
     assistant/renameaction.h
