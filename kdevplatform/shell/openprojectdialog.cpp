@@ -74,6 +74,7 @@ OpenProjectDialog::OpenProjectDialog(bool fetch, const QUrl& startUrl,
                                      const QUrl& repoUrl, IPlugin* vcsOrProviderPlugin,
                                      QWidget* parent)
     : KAssistantDialog( parent )
+    , m_projectDirUrl(QUrl())
     , m_urlIsDirectory(false)
     , sourcePage(nullptr)
     , openPage(nullptr)
@@ -318,7 +319,10 @@ void OpenProjectDialog::validateProjectName( const QString& name )
 {
     if (name != m_projectName) {
         m_projectName = name;
-        QUrl url(m_url.adjusted(QUrl::StripTrailingSlash | QUrl::RemoveFilename));
+        if (m_projectDirUrl.isEmpty()) {
+            m_projectDirUrl = m_url;
+        }
+        QUrl url(m_projectDirUrl.adjusted(QUrl::StripTrailingSlash));
         // construct a version of the project name that's safe for use as a filename:
         // TODO: do an additional replace of QDir::separator() with "@"?
         QString safeName = m_projectName;
@@ -328,7 +332,7 @@ void OpenProjectDialog::validateProjectName( const QString& name )
         safeName += '.' + ShellExtension::getInstance()->projectFileExtension();
         m_url.setPath(url.path() + QLatin1Char('/') + safeName);
         m_urlIsDirectory = false;
-        qCDebug(SHELL) << "project name:" << m_projectName << "file name:" << safeName;
+        qCDebug(SHELL) << "project name:" << m_projectName << "file name:" << safeName << "in" << url.path();
     }
     validateProjectInfo();
 }

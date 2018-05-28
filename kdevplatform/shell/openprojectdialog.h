@@ -67,6 +67,7 @@ private Q_SLOTS:
 private:
     bool execNativeDialog();
     void validateProjectInfo();
+    QUrl m_projectDirUrl;
     QUrl m_url;
     QUrl m_selected;
     QString m_projectName;
