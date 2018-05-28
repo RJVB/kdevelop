@@ -30,6 +30,7 @@
 #include <QMutexLocker>
 #include <QPointer>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QThread>
 
 #include <KConfigGroup>
@@ -195,6 +196,7 @@ public:
         m_timer.setSingleShot(true);
         m_progressTimer.setSingleShot(true);
         m_progressTimer.setInterval(500);
+        m_totalTimer.invalidate();
 
         ThreadWeaver::setDebugLevel(true, 1);
 
@@ -511,7 +513,12 @@ config.readEntry(entry, oldConfig.readEntry(entry, default))
     int m_progressMax = 0;
     int m_progressDone = 0;
     QTimer m_progressTimer;
+    QElapsedTimer m_totalTimer;
+    int m_totalJobs;
 };
+
+static qreal timingSum = 0;
+static qint64 timingCount = 0;
 
 BackgroundParser::BackgroundParser(ILanguageController *languageController)
     : QObject(languageController), d(new BackgroundParserPrivate(this, languageController))
@@ -540,6 +547,9 @@ BackgroundParser::BackgroundParser(ILanguageController *languageController)
 void BackgroundParser::aboutToQuit()
 {
     d->m_shuttingDown = true;
+    if (timingCount) {
+        qCInfo(LANGUAGE) << "Average parsing time per file:" << timingSum / timingCount << "seconds";
+    }
 }
 
 BackgroundParser::~BackgroundParser()
@@ -767,6 +777,10 @@ void BackgroundParser::updateProgressData()
         if (!d->m_progressTimer.isActive()) {
             d->m_progressTimer.start();
         }
+        if (!d->m_totalTimer.isValid()) {
+            d->m_totalTimer.start();
+            d->m_totalJobs = d->m_maxParseJobs;
+        }
     }
 
     // Cancel progress updating and hide progress-bar when parsing is done.
@@ -775,6 +789,17 @@ void BackgroundParser::updateProgressData()
     {
         if (d->m_progressTimer.isActive()) {
             d->m_progressTimer.stop();
+        }
+        if (d->m_totalTimer.isValid()) {
+            qreal elapsed = d->m_totalTimer.elapsed() / 1000.0;
+            d->m_totalTimer.invalidate();
+            if (d->m_totalJobs > 0 && qEnvironmentVariableIsSet("KDEV_BACKGROUNDPARSER_TIMINGS") && elapsed > 0.5) {
+                if (d->m_totalJobs > 1) {
+                    qCInfo(LANGUAGE) << "Parsed" << d->m_totalJobs << "file(s) in" << elapsed << "seconds";
+                }
+                timingSum += elapsed / d->m_totalJobs;
+                timingCount += 1;
+            }
         }
         emit d->m_parser->hideProgress(d->m_parser);
     }
