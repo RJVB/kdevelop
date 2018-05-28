@@ -463,7 +463,7 @@ struct Visitor
             auto it = m_parentContext->previousChildContexts.begin();
             while (it != m_parentContext->previousChildContexts.end()) {
                 auto ctx = *it;
-                if (ctx->type() == Type && ctx->indexedLocalScopeIdentifier() == indexedScopeId) {
+                if (ctx && ctx->type() == Type && ctx->indexedLocalScopeIdentifier() == indexedScopeId) {
                     ctx->setRange(range);
                     m_parentContext->resortChildContexts = true;
                     m_parentContext->previousChildContexts.erase(it);
