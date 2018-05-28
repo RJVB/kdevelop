@@ -36,6 +36,11 @@ Probably the main feature differences (at the time of writing) are:
   (see also https://github.com/RJVB/macstrop/blob/master/kf5/kf5-kdevelop/files/kdevelop-qthelp-viewer)
 - support for building only or all but the clang-based C/C++ code parser plugin; useful for packaging, if
   you want to upgrade clang without rebuilding all of KDevelop, or if you never plan any C/C++ development.
+- more consistent use of the project name allowing to have multipe projects defined in the same source tree
+- reparse entire projects through the projectmanager context menu, independent of the "Parse all project file after opening" setting.
+- use a single LMDB database file (with LZ4 compression) in the topcontexts cache directories instead of thousands of
+  files and possibly as many mmaps.
+
 
 *IMPORTANT:* any issues that arise in code specific to this fork should be reported here.
 ## =================
