@@ -242,7 +242,7 @@ Path KDevelop::proposedBuildFolder(const Path& sourceFolder)
     // check if the project is already configured for an out-of-source build:
     const QString oosBuildPath = sourceFolder.parent().path() + QStringLiteral("/build");
     if (QDir(oosBuildPath).exists()) {
-        return proposedBuildFolder;
+        return Path(oosBuildPath);
     }
     if (sourceFolder.path().contains(QStringLiteral("/src/"))) {
         const QString srcBuildPath = sourceFolder.path().replace(QStringLiteral("/src/"), QStringLiteral("/build/"));
