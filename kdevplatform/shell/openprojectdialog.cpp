@@ -279,7 +279,9 @@ void OpenProjectDialog::validateOpenUrl( const QUrl& url_ )
             }
             page->populateProjectFileCombo(choices);
         }
-        m_url.setPath( m_url.path() + '/' + m_url.fileName() + '.' + ShellExtension::getInstance()->projectFileExtension() );
+        if (!m_url.toLocalFile().endsWith('.' + ShellExtension::getInstance()->projectFileExtension())) {
+          m_url.setPath( m_url.path() + '/' + m_url.fileName() + '.' + ShellExtension::getInstance()->projectFileExtension() );
+        }
     } else {
         setAppropriate( projectInfoPage, false );
         m_url = url;
@@ -318,11 +320,17 @@ void OpenProjectDialog::openPageAccepted()
 void OpenProjectDialog::validateProjectName( const QString& name )
 {
     if (name != m_projectName) {
+        bool settingName = currentPage() == projectInfoPage;
         m_projectName = name;
-        if (m_projectDirUrl.isEmpty()) {
-            m_projectDirUrl = m_url;
+        if (m_projectDirUrl.isEmpty() && settingName) {
+            // cache the selected project directory
+            if (getUrlInfo(m_url).isDir) {
+                m_projectDirUrl = m_url.adjusted(QUrl::RemoveFilename | QUrl::StripTrailingSlash);
+            } else {
+                m_projectDirUrl = m_url.adjusted(QUrl::StripTrailingSlash);
+            }
         }
-        QUrl url(m_projectDirUrl.adjusted(QUrl::StripTrailingSlash));
+        const QUrl url(m_projectDirUrl);
         // construct a version of the project name that's safe for use as a filename:
         // TODO: do an additional replace of QDir::separator() with "@"?
         QString safeName = m_projectName;
@@ -330,9 +338,12 @@ void OpenProjectDialog::validateProjectName( const QString& name )
         safeName = safeName.replace(QChar(':'), QChar('='));
         safeName = safeName.replace(QRegExp("\\s"), QStringLiteral("_"));
         safeName += '.' + ShellExtension::getInstance()->projectFileExtension();
-        m_url.setPath(url.path() + QLatin1Char('/') + safeName);
-        m_urlIsDirectory = false;
-        qCDebug(SHELL) << "project name:" << m_projectName << "file name:" << safeName << "in" << url.path();
+        // don't interfere with m_url when validateOpenUrl() is also likely to change it
+        if (settingName) {
+            m_url.setPath(url.path() + QLatin1Char('/') + safeName);
+            m_urlIsDirectory = false;
+            qCDebug(SHELL) << "project name:" << m_projectName << "file name:" << safeName << "in" << url.path();
+        }
     }
     validateProjectInfo();
 }
