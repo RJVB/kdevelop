@@ -447,7 +447,7 @@ void ProjectBaseItem::appendRow( ProjectBaseItem* item )
 Path ProjectBaseItem::path() const
 {
     Q_D(const ProjectBaseItem);
-    return d->m_path;
+    return d ? d->m_path : Path();
 }
 
 QString ProjectBaseItem::baseName() const
