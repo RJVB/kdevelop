@@ -245,9 +245,16 @@ ProjectFolderItem* QMakeProjectManager::buildFolderItem(IProject* project, const
             // new project
             QMakeFolderItem* root = dynamic_cast<QMakeFolderItem*>(project->projectItem());
             Q_ASSERT(root);
-            qmscope->setMkSpecs(root->projectFiles().first()->mkSpecs());
-            if (root->projectFiles().first()->qmakeCache()) {
-                qmscope->setQMakeCache(root->projectFiles().first()->qmakeCache());
+            if (root && !root->projectFiles().isEmpty()) {
+              qmscope->setMkSpecs(root->projectFiles().first()->mkSpecs());
+              if (root->projectFiles().first()->qmakeCache()) {
+                  qmscope->setQMakeCache(root->projectFiles().first()->qmakeCache());
+              }
+            } else {
+              qCWarning(KDEV_QMAKE) << "Project" << project->name() << "does not have a valid root projectItem or projectFiles"
+                << project->projectItem() << (root ? root->projectFiles() : QList<QMakeProjectFile*>());
+              delete qmscope;
+              return nullptr;
             }
         }
 
