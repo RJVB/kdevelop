@@ -70,6 +70,7 @@ void TestAssistants::initTestCase()
         "kdevelop.plugins.clang.debug=true\n"
     ));
     QVERIFY(qputenv("KDEV_CLANG_DISPLAY_DIAGS", "1"));
+    qputenv("TMPDIR", QFileInfo(QDir::tempPath()).canonicalFilePath().toUtf8().constData());
     AutoTestShell::init({QStringLiteral("kdevclangsupport"), QStringLiteral("kdevproblemreporter")});
     TestCore::initialize();
     DUChain::self()->disablePersistentStorage();
@@ -665,6 +666,7 @@ void TestAssistants::testMoveIntoSource()
     {
         DUChainReadLocker lock;
         auto headerCtx = DUChain::self()->chainForDocument(header.url());
+        qWarning() << "header.url=" << header.url();
         QVERIFY(headerCtx);
         auto decls = headerCtx->findDeclarations(id);
         Q_ASSERT(!decls.isEmpty());
