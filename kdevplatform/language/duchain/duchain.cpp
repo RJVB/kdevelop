@@ -1474,7 +1474,7 @@ void DUChain::documentClosed(IDocument* document)
   IndexedString url(document->url());
 
   foreach(const ReferencedTopDUContext &top, sdDUChainPrivate->m_openDocumentContexts)
-    if(top->url() == url)
+    if(top && top->url() == url)
       sdDUChainPrivate->m_openDocumentContexts.remove(top);
 }
 
