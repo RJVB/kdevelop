@@ -44,6 +44,7 @@
 #include <KIO/Global>
 #include <KProcess>
 #include <KSharedConfig>
+#include <KShell>
 
 #include <QApplication>
 #include <QDebug>
@@ -114,15 +115,12 @@ public:
     explicit TestLaunchConfiguration(const QUrl& executable = findExecutable(QStringLiteral("debuggee_debugee")),
                             const QUrl& workingDirectory = QUrl()) {
         qDebug() << "FIND" << executable;
-        c = new KConfig();
+        c = KSharedConfig::openConfig();
         c->deleteGroup("launch");
         cfg = c->group("launch");
         cfg.writeEntry("isExecutable", true);
         cfg.writeEntry("Executable", executable);
         cfg.writeEntry("Working Directory", workingDirectory);
-    }
-    ~TestLaunchConfiguration() override {
-        delete c;
     }
     const KConfigGroup config() const override { return cfg; }
     KConfigGroup config() override { return cfg; };
@@ -130,10 +128,10 @@ public:
     KDevelop::IProject* project() const override { return nullptr; }
     KDevelop::LaunchConfigurationType* type() const override { return nullptr; }
 
-    KConfig *rootConfig() { return c; }
+    KConfig* rootConfig() { return c.data(); }
 private:
     KConfigGroup cfg;
-    KConfig *c;
+    KSharedConfigPtr c;
 };
 
 class TestFrameStackModel : public GdbFrameStackModel
@@ -458,25 +456,28 @@ void GdbTest::testUpdateBreakpoint()
     TestDebugSession *session = new TestDebugSession;
     TestLaunchConfiguration cfg;
 
-    // breakpoint 1: line 29
+    // breakpoint 1: real line 29: foo();
     KDevelop::Breakpoint * b = breakpoints()->addCodeBreakpoint(QUrl::fromLocalFile(debugeeFileName), 28);
     QCOMPARE(breakpoints()->rowCount(), 1);
 
     session->startDebugging(&cfg, m_iface);
 
-    // breakpoint 2: line 28
+    // breakpoint 2: real line 32: const char *x = "Hello";
     //insert custom command as user might do it using GDB console
-    session->addCommand(new MI::UserCommand(MI::NonMI, "break "+debugeeFileName+":28"));
+    session->addCommand(new MI::UserCommand(MI::NonMI, "break "+debugeeFileName+":32"));
 
-    WAIT_FOR_STATE_AND_IDLE(session, DebugSession::PausedState); // stop at line 28
-    session->stepInto();
-    WAIT_FOR_STATE_AND_IDLE(session, DebugSession::PausedState); // stop after step
+    WAIT_FOR_STATE_AND_IDLE(session, DebugSession::PausedState); // stop at breakpoint 1, with custom command handled
+    QCOMPARE(session->currentLine(), 28);
+
+    // check breakpoint 2 got picked up
     QCOMPARE(breakpoints()->rowCount(), 2);
     b = breakpoints()->breakpoint(1);
     QCOMPARE(b->url(), QUrl::fromLocalFile(debugeeFileName));
-    QCOMPARE(b->line(), 27);
+    QCOMPARE(b->line(), 31);
+
     session->run();
-    WAIT_FOR_STATE(session, DebugSession::PausedState); // stop at line 29
+    WAIT_FOR_STATE(session, DebugSession::PausedState); // stop at breakpoint 2
+    QCOMPARE(session->currentLine(), 31);
     session->run();
     WAIT_FOR_STATE(session, DebugSession::EndedState);
 }
@@ -1049,7 +1050,10 @@ void GdbTest::testCoreFile()
         auto coredumpctl = QStandardPaths::findExecutable(QStringLiteral("coredumpctl"));
         if (!coredumpctl.isEmpty()) {
             KProcess::execute(coredumpctl, {"-1", "-o", f.absoluteFilePath(), "dump", "debuggee_crash"}, 5000);
-            coreFileFound = f.exists();
+            // coredumpctl seems to create an empty file "core" even if no cores can be delivered
+            // (like when run inside docker containers as on KDE CI or with kernel.core_pattern=|/dev/null)
+            // so also check for size != 0
+            coreFileFound = f.exists() && (f.size() > 0);
         }
     }
     if (!coreFileFound)
@@ -1575,7 +1579,7 @@ void GdbTest::testRunGdbScript()
     QTemporaryFile runScript;
     runScript.open();
 
-    runScript.write("file " + findExecutable(QStringLiteral("debuggee_debugee")).toLocalFile().toUtf8() + "\n");
+    runScript.write("file " + KShell::quoteArg(findExecutable(QStringLiteral("debuggee_debugee")).toLocalFile()).toUtf8() + "\n");
     runScript.write("break main\n");
     runScript.write("run\n");
     runScript.close();
