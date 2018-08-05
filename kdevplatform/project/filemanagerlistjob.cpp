@@ -50,7 +50,10 @@ public:
 
     ~RunControllerProxy()
     {
-        done();
+        if (m_proxied) {
+            m_proxied->m_rcProxy = nullptr;
+            done();
+        }
     }
 
     // we don't run anything ourselves
@@ -60,9 +63,10 @@ public:
     bool doKill()
     {
         if (m_proxied) {
-            qCDebug(PROJECT) << "Aborting" << m_proxied;
-            m_proxied->abort();
+            qCWarning(PROJECT) << "Aborting" << m_proxied;
+            auto proxied = m_proxied;
             done();
+            proxied->abort();
         }
         return true;
     }
@@ -79,7 +83,10 @@ public:
 };
 
 FileManagerListJob::FileManagerListJob(ProjectFolderItem* item)
-    : KIO::Job(), m_item(item), m_baseItem(item), m_aborted(false)
+    : KIO::Job(), m_item(item), m_project(item->project())
+    // cache *a copy* of the item info, without parent info so we own it completely
+    , m_basePath(item->path())
+    , m_aborted(false)
     , m_emitWatchDir(!qEnvironmentVariableIsSet("KDEV_PROJECT_INTREE_DIRWATCHING_MODE"))
     , m_rcProxy(nullptr)
 {
@@ -105,8 +112,10 @@ FileManagerListJob::~FileManagerListJob()
         m_rcProxy->done();
         m_rcProxy->deleteLater();
     }
-    m_item = m_baseItem = nullptr;
+    m_item = nullptr;
+    m_project = nullptr;
     m_rcProxy = nullptr;
+    m_basePath = Path();
 }
 
 ProjectFolderItem* FileManagerListJob::item() const
@@ -114,14 +123,19 @@ ProjectFolderItem* FileManagerListJob::item() const
     return m_item;
 }
 
+IProject* FileManagerListJob::project() const
+{
+    return m_project;
+}
+
 QQueue<ProjectFolderItem*> FileManagerListJob::itemQueue() const
 {
     return m_listQueue;
 }
 
-ProjectFolderItem* FileManagerListJob::baseItem() const
+Path FileManagerListJob::basePath() const
 {
-    return m_baseItem;
+    return m_basePath;
 }
 
 void FileManagerListJob::addSubDir( ProjectFolderItem* item )
@@ -162,6 +176,7 @@ void FileManagerListJob::startNextJob()
 #endif
 
     m_item = m_listQueue.dequeue();
+    m_project = m_item->project();
     if (m_item->path().isLocalFile()) {
         // optimized version for local projects using QDir directly
         QtConcurrent::run([this] (const Path& path) {
@@ -247,11 +262,13 @@ void FileManagerListJob::handleResults(const KIO::UDSEntryList& entriesIn)
     emit entries(this, m_item, entriesIn);
 
     if( m_listQueue.isEmpty() ) {
-        m_baseItem = nullptr;
+        m_basePath = Path();
         emitResult();
         if (m_rcProxy) {
             m_rcProxy->done();
         }
+        m_item = nullptr;
+        m_project = nullptr;
 
 #ifdef TIME_IMPORT_JOB
         qCDebug(PROJECT) << "TIME FOR LISTJOB:" << m_timer.elapsed();
@@ -270,7 +287,9 @@ void FileManagerListJob::abort()
         m_rcProxy->done();
     }
 
-    m_baseItem = nullptr;
+    m_item = nullptr;
+    m_project = nullptr;
+    m_basePath = Path();
 
     bool killed = kill();
     m_killCount += 1;

@@ -121,11 +121,13 @@ void AbstractFileManagerPluginPrivate::projectClosing(IProject* project)
     if ( m_projectJobs.contains(project) ) {
         // make sure the import job does not live longer than the project
         // see also addLotsOfFiles test
-        foreach( FileManagerListJob* job, m_projectJobs[project] ) {
+        auto jobList = m_projectJobs[project];
+        m_projectJobs.remove(project);
+        foreach( FileManagerListJob* job, jobList ) {
             qCDebug(FILEMANAGER) << "killing project job:" << job;
             job->abort();
         }
-        m_projectJobs.remove(project);
+        jobList.clear();
     }
 #ifdef TIME_IMPORT_JOB
     QElapsedTimer timer;
@@ -156,13 +158,13 @@ FileManagerListJob* AbstractFileManagerPluginPrivate::eventuallyReadFolder(Proje
     while (jobListIt != jobListHead) {
         auto job = *(--jobListIt);
         // check the other jobs that are still running (baseItem() != NULL)
-        if (job->baseItem()) {
-            if (job->baseItem()->path().path().startsWith(path)) {
+        if (job->basePath().isValid()) {
+            if (job->basePath().path().startsWith(path)) {
                 // this job is already reloading @p item or one of its subdirs: abort it
                 // because the new job will provide a more up-to-date representation.
                 qCDebug(FILEMANAGER) << "aborting old job" << job << "before starting job for" << item->path();
-                job->abort();
                 m_projectJobs[item->project()].removeOne(job);
+                job->abort();
             } else if (job->itemQueue().contains(item)) {
                 job->removeSubDir(item);
                 qCDebug(FILEMANAGER) << "unqueueing reload of old job" << job << "before starting one for" << item->path();
@@ -199,9 +201,9 @@ FileManagerListJob* AbstractFileManagerPluginPrivate::eventuallyReadFolder(Proje
 void AbstractFileManagerPluginPrivate::jobFinished(KJob* job)
 {
     FileManagerListJob* gmlJob = qobject_cast<FileManagerListJob*>(job);
-    if (gmlJob) {
+    if (gmlJob && gmlJob->project()) {
         ifDebug(qCDebug(FILEMANAGER) << job << gmlJob << gmlJob->item();)
-        m_projectJobs[ gmlJob->item()->project() ].removeOne( gmlJob );
+        m_projectJobs[ gmlJob->project() ].removeOne( gmlJob );
     } else {
         // job emitted its finished signal from its destructor
         // ensure we don't keep a dangling point in our list
@@ -491,8 +493,8 @@ void AbstractFileManagerPluginPrivate::removeFolder(ProjectFolderItem* folder)
     foreach(FileManagerListJob* job, m_projectJobs[folder->project()]) {
         if (isChildItem(folder, job->item())) {
             qCDebug(FILEMANAGER) << "killing list job for removed folder" << job << folder->path();
+            m_projectJobs[folder->project()].removeOne(job);
             job->abort();
-            Q_ASSERT(!m_projectJobs.value(folder->project()).contains(job));
         } else {
             job->removeSubDir(folder);
         }

@@ -30,10 +30,13 @@
 #include <QElapsedTimer>
 #endif
 
+#include "path.h"
+
 namespace KDevelop
 {
     class ProjectFolderItem;
     class RunControllerProxy;
+    class IProject;
 
 class FileManagerListJob : public KIO::Job
 {
@@ -43,8 +46,9 @@ public:
     explicit FileManagerListJob(ProjectFolderItem* item);
     virtual ~FileManagerListJob();
     ProjectFolderItem* item() const;
+    IProject* project() const;
     QQueue<ProjectFolderItem*> itemQueue() const;
-    ProjectFolderItem* baseItem() const;
+    Path basePath() const;
 
     void addSubDir(ProjectFolderItem* item);
     void removeSubDir(ProjectFolderItem* item);
@@ -70,8 +74,10 @@ private:
     QQueue<ProjectFolderItem*> m_listQueue;
     /// current base dir
     ProjectFolderItem* m_item;
+    /// current project
+    IProject* m_project;
     /// entrypoint
-    ProjectFolderItem* m_baseItem;
+    Path m_basePath;
     KIO::UDSEntryList entryList;
     // kill does not delete the job instantaniously
     QAtomicInt m_aborted;
@@ -83,7 +89,9 @@ private:
 #endif
     bool m_emitWatchDir;
     int m_killCount = 0;
+protected:
     RunControllerProxy* m_rcProxy;
+    friend class RunControllerProxy;
 };
 
 }

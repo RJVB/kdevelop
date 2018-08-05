@@ -187,6 +187,7 @@ ProjectBaseItem::~ProjectBaseItem()
         model()->takeRow( d->row );
     }
     removeRows(0, d->children.size());
+    d->m_path = Path();
 }
 
 ProjectBaseItem* ProjectBaseItem::child( int row ) const
@@ -414,7 +415,7 @@ bool ProjectBaseItem::pathLessThan(ProjectBaseItem* item1, ProjectBaseItem* item
 IProject* ProjectBaseItem::project() const
 {
     Q_D(const ProjectBaseItem);
-    return d->project;
+    return d ? d->project : nullptr;
 }
 
 void ProjectBaseItem::appendRow( ProjectBaseItem* item )
