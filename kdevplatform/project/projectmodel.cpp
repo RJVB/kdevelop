@@ -414,7 +414,7 @@ bool ProjectBaseItem::pathLessThan(ProjectBaseItem* item1, ProjectBaseItem* item
 IProject* ProjectBaseItem::project() const
 {
     Q_D(const ProjectBaseItem);
-    return d->project;
+    return d ? d->project : nullptr;
 }
 
 void ProjectBaseItem::appendRow( ProjectBaseItem* item )
@@ -447,7 +447,7 @@ void ProjectBaseItem::appendRow( ProjectBaseItem* item )
 Path ProjectBaseItem::path() const
 {
     Q_D(const ProjectBaseItem);
-    return d->m_path;
+    return d ? d->m_path : Path();
 }
 
 QString ProjectBaseItem::baseName() const

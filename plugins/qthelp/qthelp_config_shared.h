@@ -23,18 +23,33 @@
 
 #include <QStringList>
 
+class ExternalViewerSettings
+{
+public:
+    ExternalViewerSettings(bool use = false, const QString& exe = QString())
+        : useExtViewer(use)
+        , extViewerExecutable(exe)
+    {}
+    bool useExtViewer = false;
+    QString extViewerExecutable;
+};
+
 void qtHelpReadConfig(QStringList& iconList,
                       QStringList& nameList,
                       QStringList& pathList,
                       QStringList& ghnsList,
                       QString& searchDir,
-                      bool& loadQtDoc);
+                      bool& loadQtDoc,
+                      ExternalViewerSettings& extViewer
+                     );
 
 void qtHelpWriteConfig(const QStringList& iconList,
                        const QStringList& nameList,
                        const QStringList& pathList,
                        const QStringList& ghnsList,
                        const QString& searchDir,
-                       const bool loadQtDoc);
+                       const bool loadQtDoc,
+                       const ExternalViewerSettings& extViewer
+                      );
 
 #endif // QTHELP_CONFIG_SHARED_H

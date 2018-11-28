@@ -18,6 +18,7 @@
    Boston, MA 02110-1301, USA.
 */
 
+#include "topducontextdynamicdata_p.h"
 #include "topducontextdynamicdata.h"
 
 #include <typeinfo>
@@ -37,9 +38,13 @@
 #include <debug.h>
 
 //#define DEBUG_DATA_INFO
+#include <QElapsedTimer>
 
 //This might be problematic on some systems, because really many mmaps are created
+#if defined(KDEV_TOPCONTEXTS_USE_FILES) && !defined(KDEV_TOPCONTEXTS_DONT_MMAP)
 #define USE_MMAP
+#endif
+
 using namespace KDevelop;
 
 namespace {
@@ -156,16 +161,6 @@ void verifyDataInfo(const TopDUContextDynamicData::ItemDataInfo& info, const QVe
 #endif
 }
 
-QString basePath()
-{
-  return globalItemRepositoryRegistry().path() + QLatin1String("/topcontexts/");
-}
-
-QString pathForTopContext(const uint topContextIndex)
-{
-  return basePath() + QString::number(topContextIndex);
-}
-
 enum LoadType {
   PartialLoad, ///< Only load the direct member data
   FullLoad     ///< Load everything, including appended lists
@@ -173,16 +168,16 @@ enum LoadType {
 template<typename F>
 void loadTopDUContextData(const uint topContextIndex, LoadType loadType, F callback)
 {
-  QFile file(pathForTopContext(topContextIndex));
-  if (!file.open(QIODevice::ReadOnly)) {
+  TopDUContextStore store(topContextIndex);
+  if (!store.open(QIODevice::ReadOnly)) {
     return;
   }
 
   uint readValue;
-  file.read((char*)&readValue, sizeof(uint));
+  store.read((char*)&readValue, sizeof(uint));
   // now readValue is filled with the top-context data size
   Q_ASSERT(readValue >= sizeof(TopDUContextData));
-  const QByteArray data = file.read(loadType == FullLoad ? readValue : sizeof(TopDUContextData));
+  const QByteArray data = store.read(loadType == FullLoad ? readValue : sizeof(TopDUContextData));
   const TopDUContextData* topData = reinterpret_cast<const TopDUContextData*>(data.constData());
   callback(topData);
 }
@@ -375,7 +370,7 @@ Item TopDUContextDynamicData::DUChainItemStorage<Item>::itemForIndex(uint index)
   }
 
   if (index == 0 || index > static_cast<uint>(items.size())) {
-    qCWarning(LANGUAGE) << "item index out of bounds:" << index << "count:" << items.size();
+    qCDebug(LANGUAGE) << "item index out of bounds:" << index << "count:" << items.size();
     return {};
   }
   const uint realIndex = index - 1;
@@ -394,13 +389,18 @@ Item TopDUContextDynamicData::DUChainItemStorage<Item>::itemForIndex(uint index)
       reinterpret_cast<const DUChainBaseData*>(data->pointerInData(offsets[realIndex].dataOffset))
     );
 
-    auto& item = items[realIndex];
-    item = dynamic_cast<typename PtrType<Item>::value>(DUChainItemSystem::self().create(itemData));
-    if (!item) {
-      //When this happens, the item has not been registered correctly.
-      //We can stop here, because else we will get crashes later.
-      qCritical() << "Failed to load item with identity" << itemData->classId;
-      return {};
+    if (itemData) {
+      auto& item = items[realIndex];
+      item = dynamic_cast<typename PtrType<Item>::value>(DUChainItemSystem::self().create(itemData));
+      if (!item) {
+        //When this happens, the item has not been registered correctly.
+        //We can stop here, because else we will get crashes later.
+        qCritical() << "Failed to load item with identity" << itemData->classId;
+        return {};
+      }
+    } else {
+        qCritical() << "Failed to load item at realIndex" << realIndex << "itemData=" << itemData;
+        return {};
     }
 
     if (isSharedDataItem<Item>()) {
@@ -415,7 +415,7 @@ Item TopDUContextDynamicData::DUChainItemStorage<Item>::itemForIndex(uint index)
                                     "Potentially, the context has been deleted without deleting its children.");
     item->rebuildDynamicData(parent, index);
   } else {
-    qCWarning(LANGUAGE) << "invalid item for index" << index << offsets.size() << offsets.value(realIndex).dataOffset;
+    qCDebug(LANGUAGE) << "invalid item for index" << index << offsets.size() << offsets.value(realIndex).dataOffset;
   }
 
   return item;
@@ -432,27 +432,27 @@ void TopDUContextDynamicData::DUChainItemStorage<Item>::deleteOnDisk()
 }
 
 template<class Item>
-void TopDUContextDynamicData::DUChainItemStorage<Item>::loadData(QFile* file) const
+void TopDUContextDynamicData::DUChainItemStorage<Item>::loadData(TopDUContextStore* store) const
 {
   Q_ASSERT(offsets.isEmpty());
   Q_ASSERT(items.isEmpty());
 
   uint readValue;
-  file->read((char*)&readValue, sizeof(uint));
+  store->read((char*)&readValue, sizeof(uint));
   offsets.resize(readValue);
 
-  file->read((char*)offsets.data(), sizeof(ItemDataInfo) * offsets.size());
+  store->read((char*)offsets.data(), sizeof(ItemDataInfo) * offsets.size());
 
   //Fill with zeroes for now, will be initialized on-demand
   items.resize(offsets.size());
 }
 
 template<class Item>
-void TopDUContextDynamicData::DUChainItemStorage<Item>::writeData(QFile* file)
+void TopDUContextDynamicData::DUChainItemStorage<Item>::writeData(TopDUContextStore* store)
 {
   uint writeValue = offsets.size();
-  file->write((char*)&writeValue, sizeof(uint));
-  file->write((char*)offsets.data(), sizeof(ItemDataInfo) * offsets.size());
+  store->write((char*)&writeValue, sizeof(uint));
+  store->write((char*)offsets.data(), sizeof(ItemDataInfo) * offsets.size());
 }
 
 //END DUChainItemStorage
@@ -503,7 +503,7 @@ void KDevelop::TopDUContextDynamicData::unmap() {
 
 bool TopDUContextDynamicData::fileExists(uint topContextIndex)
 {
-  return QFile::exists(pathForTopContext(topContextIndex));
+  return TopDUContextStore::exists(topContextIndex);
 }
 
 QList<IndexedDUContext> TopDUContextDynamicData::loadImporters(uint topContextIndex) {
@@ -545,61 +545,61 @@ void TopDUContextDynamicData::loadData() const {
   Q_ASSERT(!m_dataLoaded);
   Q_ASSERT(m_data.isEmpty());
 
-  QFile* file = new QFile(pathForTopContext(m_topContext->ownIndex()));
-  bool open = file->open(QIODevice::ReadOnly);
+  TopDUContextStore* store = new TopDUContextStore(m_topContext->ownIndex());
+  bool open = store->open(QIODevice::ReadOnly);
   Q_UNUSED(open);
   Q_ASSERT(open);
-  Q_ASSERT(file->size());
+  Q_ASSERT(store->size());
 
   //Skip the offsets, we're already read them
   //Skip top-context data
   uint readValue;
-  file->read((char*)&readValue, sizeof(uint));
-  file->seek(readValue + file->pos());
+  store->read((char*)&readValue, sizeof(uint));
+  store->seek(readValue + store->pos());
 
-  m_contexts.loadData(file);
-  m_declarations.loadData(file);
-  m_problems.loadData(file);
+  m_contexts.loadData(store);
+  m_declarations.loadData(store);
+  m_problems.loadData(store);
 
 #ifdef USE_MMAP
 
-  m_mappedData = file->map(file->pos(), file->size() - file->pos());
+  m_mappedData = store->map(store->pos(), store->size() - store->pos());
   if(m_mappedData) {
-    m_mappedFile = file;
-    m_mappedDataSize = file->size() - file->pos();
-    file->close(); //Close the file, so there is less open file descriptors(May be problematic)
+    m_mappedFile = store;
+    m_mappedDataSize = store->size() - store->pos();
+    store->commit(); //Close the store, so there are less open file descriptors (May be problematic)
   }else{
-    qCDebug(LANGUAGE) << "Failed to map" << file->fileName();
+    qCDebug(LANGUAGE) << "Failed to map" << store->fileName();
   }
 
 #endif
 
   if(!m_mappedFile) {
-    QByteArray data = file->readAll();
+    QByteArray data = store->readAll();
     m_data.append({data, (uint)data.size()});
-    delete file;
+    delete store;
   }
 
   m_dataLoaded = true;
 }
 
 TopDUContext* TopDUContextDynamicData::load(uint topContextIndex) {
-  QFile file(pathForTopContext(topContextIndex));
-  if(file.open(QIODevice::ReadOnly)) {
-    if(file.size() == 0) {
-      qCWarning(LANGUAGE) << "Top-context file is empty" << file.fileName();
+  TopDUContextStore store(topContextIndex);
+  if(store.open(QIODevice::ReadOnly)) {
+    if(store.size() == 0) {
+      qCWarning(LANGUAGE) << "Top-context store is empty" << store.fileName();
       return nullptr;
     }
 
     uint readValue;
-    file.read((char*)&readValue, sizeof(uint));
+    store.read((char*)&readValue, sizeof(uint));
     //now readValue is filled with the top-context data size
-    QByteArray topContextData = file.read(readValue);
+    QByteArray topContextData = store.read(readValue);
 
     DUChainBaseData* topData = reinterpret_cast<DUChainBaseData*>(topContextData.data());
     TopDUContext* ret = dynamic_cast<TopDUContext*>(DUChainItemSystem::self().create(topData));
     if(!ret) {
-      qCWarning(LANGUAGE) << "Cannot load a top-context from file" << file.fileName() << "- the required language-support for handling ID" << topData->classId << "is probably not loaded";
+      qCWarning(LANGUAGE) << "Cannot load a top-context from store" << store.fileName() << "- the required language-support for handling ID" << topData->classId << "is probably not loaded";
       return nullptr;
     }
 
@@ -636,10 +636,20 @@ void TopDUContextDynamicData::deleteOnDisk() {
 
   m_onDisk = false;
 
-  bool successfullyRemoved = QFile::remove(filePath());
+  bool successfullyRemoved = TopDUContextStore::remove(m_topContext->ownIndex());
   Q_UNUSED(successfullyRemoved);
   Q_ASSERT(successfullyRemoved);
   qCDebug(LANGUAGE) << "deletion ready";
+}
+
+QString TopDUContextDynamicData::basePath()
+{
+  return globalItemRepositoryRegistry().path() + QLatin1String("/topcontexts/");
+}
+
+QString TopDUContextDynamicData::pathForTopContext(const uint topContextIndex)
+{
+  return basePath() + QString::number(topContextIndex);
 }
 
 QString KDevelop::TopDUContextDynamicData::filePath() const {
@@ -720,32 +730,55 @@ void TopDUContextDynamicData::store() {
 
     QDir().mkpath(basePath());
 
-    QFile file(filePath());
-    if(file.open(QIODevice::WriteOnly)) {
+    QElapsedTimer timer;
+    qint64 nBytes = 0;
+    if (Q_LIKELY(QFileInfo(basePath()).isWritable())) {
+      timer.start();
+      TopDUContextStore store(m_topContext->ownIndex());
+      if(store.open(QIODevice::WriteOnly)) {
 
-      file.resize(0);
+        store.resize(0);
 
-      file.write((char*)&topContextDataSize, sizeof(uint));
-      foreach(const ArrayWithPosition& pos, m_topContextData)
-        file.write(pos.array.constData(), pos.position);
+        store.write((char*)&topContextDataSize, sizeof(uint));
+        foreach(const ArrayWithPosition& pos, m_topContextData)
+          store.write(pos.array.constData(), pos.position);
 
-      m_contexts.writeData(&file);
-      m_declarations.writeData(&file);
-      m_problems.writeData(&file);
+        m_contexts.writeData(&store);
+        m_declarations.writeData(&store);
+        m_problems.writeData(&store);
 
-      foreach(const ArrayWithPosition& pos, m_data)
-        file.write(pos.array.constData(), pos.position);
+        foreach(const ArrayWithPosition& pos, m_data)
+          store.write(pos.array.constData(), pos.position);
 
-      m_onDisk = true;
+        m_onDisk = true;
 
-      if (file.size() == 0) {
-        qCWarning(LANGUAGE) << "Saving zero size top ducontext data";
+        nBytes = store.size();
+        if (store.size() == 0) {
+          qCWarning(LANGUAGE) << "Saving zero size top ducontext data";
+        }
+        store.commit();
+      } else {
+        qCWarning(LANGUAGE) << "Cannot open topcontext" << store.fileName() << "for writing:" << store.errorString();
       }
-      file.close();
+//     qCDebug(LANGUAGE) << "stored" << m_topContext->url().str() << m_topContext->ownIndex() << "import-count:" << m_topContext->importedParentContexts().size();
     } else {
-      qCWarning(LANGUAGE) << "Cannot open top-context for writing";
+      static bool warned = false;
+      if (!warned) {
+        qCWarning(LANGUAGE) << "Topcontexts directory" << basePath() << "is not writable, topcontext files won't be stored.";
+        warned = true;
+      }
     }
-//   qCDebug(LANGUAGE) << "stored" << m_topContext->url().str() << m_topContext->ownIndex() << "import-count:" << m_topContext->importedParentContexts().size();
+    if (timer.isValid()) {
+      auto elapsed = timer.elapsed();
+      static quint64 totalBytes = 0;
+      static double totalElapsed = 0.0;
+      totalBytes += nBytes;
+      totalElapsed += elapsed / 1000.0;
+      if (totalBytes && totalElapsed >= 0.5) {
+        qCInfo(LANGUAGE) << "Stored" << totalBytes << "topcontext bytes at" << totalBytes / totalElapsed << "bytes/second";
+        totalBytes = 0, totalElapsed = 0.0;
+      }
+    }
 }
 
 TopDUContextDynamicData::ItemDataInfo TopDUContextDynamicData::writeDataInfo(const ItemDataInfo& info, const DUChainBaseData* data, uint& totalDataOffset) {

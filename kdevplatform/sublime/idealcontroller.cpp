@@ -39,6 +39,8 @@
 #include "idealdockwidget.h"
 #include "idealbuttonbarwidget.h"
 
+#include <QDebug>
+
 using namespace Sublime;
 
 IdealController::IdealController(Sublime::MainWindow* mainWindow):
@@ -149,7 +151,14 @@ void IdealController::dockLocationChanged(Qt::DockWidgetArea area)
 {
     IdealDockWidget *dock = qobject_cast<IdealDockWidget*>(sender());
     View *view = dock->view();
-    QAction* action = m_view_to_action.value(view);
+    QAction* action = nullptr;
+    if (m_view_to_action.contains(view)) {
+        action = m_view_to_action.value(view);
+    }
+    if (!action) {
+        qCritical() << Q_FUNC_INFO << "View" << view << "has no known hide/shown action";
+        return;
+    }
 
     if (dock->dockWidgetArea() == area) {
         // this event can happen even when dock changes its location within the same area
@@ -239,8 +248,15 @@ void IdealController::raiseView(View* view, RaiseMode mode)
     ///       for tool views of the same type.
     mode = HideOtherViews;
 
-    QAction* action = m_view_to_action.value(view);
+    QAction* action = nullptr;
+    if (m_view_to_action.contains(view)) {
+        action = m_view_to_action.value(view);
+    }
     Q_ASSERT(action);
+    if (!action) {
+        qCritical() << Q_FUNC_INFO << "View" << view << "has no known hide/shown action";
+        return;
+    }
 
     QWidget *focusWidget = m_mainWindow->focusWidget();
 
@@ -296,7 +312,7 @@ QWidget* IdealController::statusBarLocation() const
 
 QAction* IdealController::actionForView(View* view) const
 {
-    return m_view_to_action.value(view);
+    return m_view_to_action.contains(view) ? m_view_to_action.value(view) : nullptr;
 }
 
 void IdealController::setShowDockStatus(Qt::DockWidgetArea area, bool checked)
@@ -325,17 +341,23 @@ QAction* IdealController::actionForArea(Qt::DockWidgetArea area) const
 
 void IdealController::removeView(View* view, bool nondestructive)
 {
-    Q_ASSERT(m_view_to_action.contains(view));
-    QAction* action = m_view_to_action.value(view);
+    QAction* action = nullptr;
+    if (m_view_to_action.contains(view)) {
+        action = m_view_to_action.value(view);
+    }
+    if (!action) {
+        qCritical() << Q_FUNC_INFO << "View" << view << "has no known hide/shown action";
+        return;
+    }
 
     QWidget *viewParent = view->widget()->parentWidget();
     IdealDockWidget *dock = qobject_cast<IdealDockWidget *>(viewParent);
     if (!dock) { // tool views with a toolbar live in a QMainWindow which lives in a Dock
-        Q_ASSERT(qobject_cast<QMainWindow*>(viewParent));
-        viewParent = viewParent->parentWidget();
-        dock = qobject_cast<IdealDockWidget*>(viewParent);
+        if (qobject_cast<QMainWindow*>(viewParent)) {
+            viewParent = viewParent->parentWidget();
+            dock = qobject_cast<IdealDockWidget*>(viewParent);
+        }
     }
-    Q_ASSERT(dock);
 
     /* Hide the view, first.  This is a workaround -- if we
        try to remove IdealDockWidget without this, then eventually
@@ -343,16 +365,18 @@ void IdealController::removeView(View* view, bool nondestructive)
        method asserts immediately.  */
     action->setChecked(false);
 
-    if (IdealButtonBarWidget* bar = barForDockArea(dock->dockWidgetArea()))
-        bar->removeAction(action);
+    if (dock) {
+        if (IdealButtonBarWidget* bar = barForDockArea(dock->dockWidgetArea()))
+            bar->removeAction(action);
 
+        m_dockwidget_to_action.remove(dock);
+
+        if (nondestructive)
+            view->widget()->setParent(nullptr);
+
+        delete dock;
+    }
     m_view_to_action.remove(view);
-    m_dockwidget_to_action.remove(dock);
-
-    if (nondestructive)
-        view->widget()->setParent(nullptr);
-
-    delete dock;
 }
 
 void IdealController::moveView(View *view, Qt::DockWidgetArea area)

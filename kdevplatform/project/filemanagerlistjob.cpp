@@ -29,11 +29,66 @@
 // Qt
 #include <QtConcurrentRun>
 #include <QDir>
+#include <QTimer>
+
+#include <interfaces/icore.h>
+#include <interfaces/iruncontroller.h>
 
 using namespace KDevelop;
 
+class KDevelop::RunControllerProxy : public KJob
+{
+public:
+    RunControllerProxy(FileManagerListJob* proxied)
+        : KJob()
+        , m_proxied(proxied)
+    {
+        setCapabilities(KJob::Killable);
+        setObjectName(proxied->objectName());
+        ICore::self()->runController()->registerJob(this);
+    }
+
+    ~RunControllerProxy()
+    {
+        if (m_proxied) {
+            m_proxied->m_rcProxy = nullptr;
+            done();
+        }
+    }
+
+    // we don't run anything ourselves
+    void start()
+    {}
+
+    bool doKill()
+    {
+        if (m_proxied) {
+            qCWarning(PROJECT) << "Aborting" << m_proxied;
+            auto proxied = m_proxied;
+            done();
+            proxied->abort();
+        }
+        return true;
+    }
+
+    void done()
+    {
+        if (m_proxied) {
+            ICore::self()->runController()->unregisterJob(this);
+            m_proxied = nullptr;
+        }
+    }
+
+    FileManagerListJob* m_proxied;
+};
+
 FileManagerListJob::FileManagerListJob(ProjectFolderItem* item)
-    : KIO::Job(), m_item(item), m_aborted(false)
+    : KIO::Job(), m_item(item), m_project(item->project())
+    // cache *a copy* of the item info, without parent info so we own it completely
+    , m_basePath(item->path())
+    , m_aborted(false)
+    , m_emitWatchDir(!qEnvironmentVariableIsSet("KDEV_PROJECT_INTREE_DIRWATCHING_MODE"))
+    , m_rcProxy(nullptr)
 {
     qRegisterMetaType<KIO::UDSEntryList>("KIO::UDSEntryList");
     qRegisterMetaType<KIO::Job*>();
@@ -51,13 +106,44 @@ FileManagerListJob::FileManagerListJob(ProjectFolderItem* item)
 #endif
 }
 
+FileManagerListJob::~FileManagerListJob()
+{
+    if (m_rcProxy) {
+        m_rcProxy->done();
+        m_rcProxy->deleteLater();
+    }
+    m_item = nullptr;
+    m_project = nullptr;
+    m_rcProxy = nullptr;
+    m_basePath = Path();
+}
+
 ProjectFolderItem* FileManagerListJob::item() const
 {
     return m_item;
 }
 
+IProject* FileManagerListJob::project() const
+{
+    return m_project;
+}
+
+QQueue<ProjectFolderItem*> FileManagerListJob::itemQueue() const
+{
+    return m_listQueue;
+}
+
+Path FileManagerListJob::basePath() const
+{
+    return m_basePath;
+}
+
 void FileManagerListJob::addSubDir( ProjectFolderItem* item )
 {
+    if (m_aborted) {
+        return;
+    }
+
     Q_ASSERT(!m_listQueue.contains(item));
     Q_ASSERT(!m_item || m_item == item || m_item->path().isDirectParentOf(item->path()));
 
@@ -66,6 +152,10 @@ void FileManagerListJob::addSubDir( ProjectFolderItem* item )
 
 void FileManagerListJob::removeSubDir(ProjectFolderItem* item)
 {
+    if (m_aborted) {
+        return;
+    }
+
     m_listQueue.removeAll(item);
 }
 
@@ -86,6 +176,7 @@ void FileManagerListJob::startNextJob()
 #endif
 
     m_item = m_listQueue.dequeue();
+    m_project = m_item->project();
     if (m_item->path().isLocalFile()) {
         // optimized version for local projects using QDir directly
         QtConcurrent::run([this] (const Path& path) {
@@ -96,6 +187,10 @@ void FileManagerListJob::startNextJob()
             const auto entries = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::AllEntries | QDir::Hidden);
             if (m_aborted) {
                 return;
+            }
+            if (m_emitWatchDir) {
+                // signal that this directory has to be watched
+                emit watchDir(path.toLocalFile());
             }
             KIO::UDSEntryList results;
             std::transform(entries.begin(), entries.end(), std::back_inserter(results), [] (const QFileInfo& info) -> KIO::UDSEntry {
@@ -121,7 +216,9 @@ void FileManagerListJob::startNextJob()
                 }
                 return entry;
             });
-            QMetaObject::invokeMethod(this, "handleResults", Q_ARG(KIO::UDSEntryList, results));
+            if (!m_aborted) {
+                QMetaObject::invokeMethod(this, "handleResults", Q_ARG(KIO::UDSEntryList, results));
+            }
         }, m_item->path());
     } else {
         KIO::ListJob* job = KIO::listDir( m_item->path().toUrl(), KIO::HideProgressInfo );
@@ -165,7 +262,13 @@ void FileManagerListJob::handleResults(const KIO::UDSEntryList& entriesIn)
     emit entries(this, m_item, entriesIn);
 
     if( m_listQueue.isEmpty() ) {
+        m_basePath = Path();
         emitResult();
+        if (m_rcProxy) {
+            m_rcProxy->done();
+        }
+        m_item = nullptr;
+        m_project = nullptr;
 
 #ifdef TIME_IMPORT_JOB
         qCDebug(PROJECT) << "TIME FOR LISTJOB:" << m_timer.elapsed();
@@ -178,13 +281,39 @@ void FileManagerListJob::handleResults(const KIO::UDSEntryList& entriesIn)
 void FileManagerListJob::abort()
 {
     m_aborted = true;
+    m_listQueue.clear();
+
+    if (m_rcProxy) {
+        m_rcProxy->done();
+    }
+
+    m_item = nullptr;
+    m_project = nullptr;
+    m_basePath = Path();
 
     bool killed = kill();
+    m_killCount += 1;
+    if (!killed) {
+        // let's check if kill failures aren't because of trying to kill a corpse
+        qCWarning(PROJECT) << "failed to kill" << this << "kill count=" << m_killCount;
+    }
     Q_ASSERT(killed);
     Q_UNUSED(killed);
 }
 
+void FileManagerListJob::start(int msDelay)
+{
+    if (msDelay > 0) {
+        QTimer::singleShot(msDelay, this, SLOT(start()));
+    } else {
+        start();
+    }
+}
+
 void FileManagerListJob::start()
 {
+    if (!m_rcProxy) {
+        m_rcProxy = new RunControllerProxy(this);
+    }
     startNextJob();
 }

@@ -21,6 +21,7 @@
 
 #include <KActionMenu>
 #include <KLocalizedString>
+#include <KTextEditor/View>
 
 #include <QAction>
 #include <QLineEdit>
@@ -30,6 +31,7 @@
 #include <QVBoxLayout>
 
 #include <interfaces/icore.h>
+#include <interfaces/idocumentcontroller.h>
 #include <interfaces/ilanguagecontroller.h>
 #include <shell/problemconstants.h>
 #include <shell/problemmodelset.h>
@@ -196,7 +198,12 @@ void ProblemsView::setupActions()
         addAction(filterAction);
 
         m_prevTabIdx = -1;
-        setFocusProxy(m_filterEdit);
+        const auto activeDoc = ICore::self()->documentController()->activeDocument();
+        if (activeDoc && m_currentDocumentAction->isChecked()) {
+            setFocusProxy(activeDoc->activeTextView());
+        } else {
+            setFocusProxy(m_filterEdit);
+        }
     }
 }
 
@@ -228,6 +235,10 @@ void ProblemsView::updateActions()
 
     problemModel->setSeverities(IProblem::Error | IProblem::Warning | IProblem::Hint);
 
+    const auto activeDoc = ICore::self()->documentController()->activeDocument();
+    if (activeDoc && m_currentDocumentAction->isChecked()) {
+        setFocusProxy(activeDoc->activeTextView());
+    }
     setFocus(); // set focus to default widget (filterEdit)
 }
 
@@ -431,6 +442,10 @@ void ProblemsView::updateTab(int idx, int rows)
     const QString name = m_models[idx].name;
     const QString tabText = i18nc("%1: tab name, %2: number of problems", "%1 (%2)", name, rows);
     m_tabWidget->setTabText(idx, tabText);
+    const auto activeDoc = ICore::self()->documentController()->activeDocument();
+    if (activeDoc && m_currentDocumentAction->isChecked()) {
+        setFocusProxy(activeDoc->activeTextView());
+    }
 }
 
 ProblemTreeView* ProblemsView::currentView() const
@@ -470,6 +485,10 @@ void ProblemsView::setScope(int scope)
     m_scopeMenu->setText(i18n("Scope: %1", m_scopeMenu->menu()->actions().at(scope)->text()));
 
     currentView()->model()->setScope(scope);
+    const auto activeDoc = ICore::self()->documentController()->activeDocument();
+    if (activeDoc && scope == CurrentDocument) {
+        setFocusProxy(activeDoc->activeTextView());
+    }
 }
 
 void ProblemsView::setFilter(const QString& filterText)

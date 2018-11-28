@@ -186,7 +186,9 @@ void VcsPluginHelper::disposeEventually(KTextEditor::Document *)
 
 void VcsPluginHelper::setupFromContext(Context* context)
 {
-    d->ctxUrls = context->urls();
+    if (context) {
+        d->ctxUrls = context->urls();
+    }
 }
 
 QList<QUrl> VcsPluginHelper::contextUrlList() const

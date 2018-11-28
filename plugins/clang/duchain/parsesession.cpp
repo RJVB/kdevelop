@@ -90,10 +90,7 @@ void sanitizeArguments(QVector<QByteArray>& arguments)
 QVector<QByteArray> argsForSession(const QString& path, ParseSessionData::Options options, const ParserSettings& parserSettings)
 {
     QMimeDatabase db;
-    if(db.mimeTypeForFile(path).name() == QStringLiteral("text/x-objcsrc")) {
-        return {QByteArrayLiteral("-xobjective-c++")};
-    }
-
+    QString mimeType = db.mimeTypeForFile(path).name();
     // TODO: No proper mime type detection possible yet
     // cf. https://bugs.freedesktop.org/show_bug.cgi?id=26913
     if (path.endsWith(QLatin1String(".cl"), Qt::CaseInsensitive)) {
@@ -131,7 +128,15 @@ QVector<QByteArray> argsForSession(const QString& path, ParseSessionData::Option
         return result;
     }
 
-    result.append(parserSettings.isCpp() ? QByteArrayLiteral("-xc++") : QByteArrayLiteral("-xc"));
+    if (mimeType == QStringLiteral("text/x-objc++src")) {
+        result.append(QByteArrayLiteral("-xobjective-c++"));
+    } else if (mimeType == QStringLiteral("text/x-objcsrc")) {
+        result.append(QByteArrayLiteral(" -ObjC"));
+    } else if (parserSettings.isCpp()) {
+       result.append(QByteArrayLiteral("-xc++"));
+    } else {
+       result.append(QByteArrayLiteral("-xc"));
+    }
 
     sanitizeArguments(result);
     return result;

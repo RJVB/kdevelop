@@ -101,9 +101,12 @@ ClangDiagnosticEvaluator::DiagnosticType ClangDiagnosticEvaluator::diagnosticTyp
     const ClangString str(clang_getDiagnosticSpelling(diagnostic));
     const auto description = QByteArray::fromRawData(str.c_str(), qstrlen(str.c_str()));
 
+#ifndef NO_UNKNOWNDECLARATION_PROBLEM_SUPPORT
     if (isDeclarationProblem(description)) {
         return UnknownDeclarationProblem;
-    } else if (isIncludeFileNotFound(description)) {
+    } else
+#endif
+    if (isIncludeFileNotFound(description)) {
         return IncludeFileNotFoundProblem;
     } else if (isReplaceWithDotProblem(description)) {
         return ReplaceWithDotProblem;
@@ -120,9 +123,11 @@ ClangProblem* ClangDiagnosticEvaluator::createProblem(CXDiagnostic diagnostic, C
     case IncludeFileNotFoundProblem:
         return new MissingIncludePathProblem(diagnostic, unit);
         break;
+#ifndef NO_UNKNOWNDECLARATION_PROBLEM_SUPPORT
     case UnknownDeclarationProblem:
         return new class UnknownDeclarationProblem(diagnostic, unit);
         break;
+#endif
     default:
         return new ClangProblem(diagnostic, unit);
         break;

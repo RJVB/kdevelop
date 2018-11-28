@@ -8,9 +8,26 @@ set(KDEVELOP_SOVERSION 53)
 # plugin version as used e.g. in plugin installation path
 set(KDEV_PLUGIN_VERSION 31)
 
+option(KDEVELOP_BUILD_IDE "Build the IDE" ON)
+option(KDEVELOP_BUILD_CLANG_PARSER "Build the Clang-based C/C++ parser (formerly kdev-clang)" ON)
+
+if(APPLE OR WIN32)
+    option(KDEVELOP_NATIVE_DIALOGS "Use native file dialogs instead of KDE dialogs" ON)
+else()
+    option(KDEVELOP_NATIVE_DIALOGS "Use native file dialogs instead of KDE dialogs" OFF)
+endif()
+
 # we need some parts of the ECM CMake helpers
 find_package (ECM 5.14.0 REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${KDevelop_SOURCE_DIR}/cmake/modules ${ECM_MODULE_PATH})
+
+if (NOT KDEVELOP_BUILD_IDE)
+    if (NOT KDEVELOP_BUILD_CLANG_PARSER)
+        message(FATAL_ERROR "KDEVELOP_BUILD_IDE and KDEVELOP_BUILD_CLANG_PARSER cannot both be OFF!")
+    else()
+        message(WARNING "Invoke make in ${CMAKE_CURRENT_BINARY_DIR}/plugins/clang in order to build only kdev-clang!")
+    endif()
+endif()
 
 include(KDECompilerSettings NO_POLICY_SCOPE) # needs to be first, as set policies influence following macros
 include(ECMOptionalAddSubdirectory)
@@ -39,6 +56,8 @@ if(POLICY CMP0071)
   # Note: Once we depend on a Qt which has this fix (likely Qt 5.9.4+), remove this
   cmake_policy(SET CMP0071 OLD)
 endif()
+
+include(GetGitRevisionDescription)
 
 set(QT_MIN_VERSION "5.5.0")
 find_package(Qt5 ${QT_MIN_VERSION} CONFIG REQUIRED Widgets Concurrent Quick QuickWidgets)
@@ -117,6 +136,10 @@ add_definitions(
     -DQT_NO_NARROWING_CONVERSIONS_IN_CONNECT
 )
 
+if(KDEVELOP_NATIVE_DIALOGS)
+    add_definitions(-DKDEV_USE_NATIVE_DIALOGS)
+endif()
+
 # Turn off missing-field-initializers warning for GCC to avoid noise from false positives with empty {}
 # See discussion: http://mail.kde.org/pipermail/kdevelop-devel/2014-February/046910.html
 add_compile_flag_if_supported(-Wno-missing-field-initializers)
@@ -150,7 +173,37 @@ endif()
 # create config-kdevelop.h
 configure_file(config-kdevelop.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config-kdevelop.h)
 
-add_subdirectory(kdevplatform)
+# create kdevelop_fullversion.h
+set(KDevelop_FULL_VERSION "${KDevelop_VERSION_MAJOR}.${KDevelop_VERSION_MINOR}.${KDevelop_VERSION_PATCH}")
+git_describe(GIT_FULL_VERSION "--tags")
+if(GIT_FULL_VERSION)
+    # development build, i.e. from a git working copy.
+    # Get the current commit version using `git describe` and
+    # strip the leading v plus the part that matches the version
+    # declared in the project definition above.
+    string(REPLACE "v${KDevelop_FULL_VERSION}" "" COMMIT_VERSION "${GIT_FULL_VERSION}")
+    if(NOT ${COMMIT_VERSION} MATCHES ${GIT_FULL_VERSION})
+        # `git describe` agrees with KDevelop_VERSION_STRING;
+        # make an atomic version string by appending the additional info
+        string(APPEND KDevelop_FULL_VERSION ${COMMIT_VERSION})
+    else()
+        # `git describe` provides a seemingly unrelated version string;
+        # append it in parentheses.
+        string(APPEND KDevelop_FULL_VERSION " (${GIT_FULL_VERSION})")
+    endif()
+    message(STATUS "Setting KDevelop version to: ${KDevelop_FULL_VERSION}")
+endif()
+configure_file(kdevelop_fullversion.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/kdevelop_fullversion.h)
+
+if (KDEVELOP_BUILD_IDE)
+    add_subdirectory(kdevplatform)
+else()
+    message(STATUS "Checking for installed KDevPlatform v${KDevelop_VERSION_MAJOR}.${KDevelop_VERSION_MINOR}.${KDevelop_VERSION_PATCH}")
+    find_package(KDevPlatform ${KDevelop_VERSION_MAJOR}.${KDevelop_VERSION_MINOR}.${KDevelop_VERSION_PATCH} CONFIG)
+    set_package_properties(KDevPlatform PROPERTIES
+        TYPE REQUIRED
+    )
+endif()
 add_subdirectory(plugins)
 
 add_subdirectory(pics)

@@ -15,6 +15,7 @@
 #include <QPushButton>
 #include <QFileInfo>
 #include <QFileDialog>
+#include <QRegularExpression>
 
 #include <KColorScheme>
 #include <KIO/StatJob>
@@ -87,7 +88,13 @@ OpenProjectDialog::OpenProjectDialog(bool fetch, const QUrl& startUrl,
         delete helpButton;
     }
 
-    const bool useKdeFileDialog = qEnvironmentVariableIsSet("KDE_FULL_SESSION");
+#ifndef KDEV_USE_NATIVE_DIALOGS
+    // the user selected KDE file dialogs via the CMake option
+    const bool useKdeFileDialog = true;
+#else
+    // the user selected native file dialogs via the CMake option
+    const bool useKdeFileDialog = false;
+#endif
     QStringList filters, allEntry;
     QString filterFormat = useKdeFileDialog
                          ? QStringLiteral("%1|%2 (%1)")
@@ -272,7 +279,13 @@ void OpenProjectDialog::validateOpenUrl( const QUrl& url_ )
             }
             page->populateProjectFileCombo(choices);
         }
-        m_url.setPath( m_url.path() + QLatin1Char('/') + m_url.fileName() + QLatin1Char('.') + ShellExtension::getInstance()->projectFileExtension() );
+        // Turn m_url into the full path to the project filename (default: /path/to/projectSrc/projectSrc.kdev4).
+        // This is done only when m_url doesn't already point to such a file, typically because the user selected
+        // one in the project open dialog. Omitting this check could lead to project files of the form
+        // /path/to/projectSrc/SourceProject.kdev4/projectSrc.kdev4 .
+        if (!m_url.toLocalFile().endsWith(QLatin1Char('.') + ShellExtension::getInstance()->projectFileExtension())) {
+            m_url.setPath( m_url.path() + QLatin1Char('/') + m_url.fileName() + QLatin1Char('.') + ShellExtension::getInstance()->projectFileExtension() );
+        }
     } else {
         setAppropriate( projectInfoPage, false );
         m_url = url;
@@ -310,7 +323,39 @@ void OpenProjectDialog::openPageAccepted()
 
 void OpenProjectDialog::validateProjectName( const QString& name )
 {
-    m_projectName = name;
+    if (name != m_projectName) {
+        m_projectName = name;
+        bool isEnteringProjectName = (currentPage() == projectInfoPage);
+        // don't interfere with m_url when validateOpenUrl() is also likely to change it
+        if (isEnteringProjectName) {
+            if (m_projectDirUrl.isEmpty()) {
+                // cache the selected project directory
+                const auto urlInfo = ::urlInfo(m_url);
+                if (urlInfo.isValid && urlInfo.isDir) {
+                    m_projectDirUrl = m_url.adjusted(QUrl::StripTrailingSlash);
+                } else {
+                    // if !urlInfo.isValid the url almost certainly refers to a file that doesn't exist (yet)
+                    // With the Generic Makefile proj.manager it can be the project file url, for instance.
+                    m_projectDirUrl = m_url.adjusted(QUrl::RemoveFilename | QUrl::StripTrailingSlash);
+                }
+            }
+
+            const QUrl url(m_projectDirUrl);
+            // construct a version of the project name that is safe for use as a filename, i.e.
+            // a version that does not contain characters that are illegal or are best avoided:
+            // replace square braces and dir separator-like characters with a '@' placeholder
+            // replace colons with '=' and whitespace with underscores.
+            QString safeName = m_projectName;
+            safeName.replace(QRegularExpression(QStringLiteral("[\\\\/]")), QStringLiteral("@"));
+            safeName = safeName.replace(QLatin1Char(':'), QLatin1Char('=')) \
+                .replace(QRegExp(QStringLiteral("\\s")), QStringLiteral("_"));
+            safeName += QLatin1Char('.') + ShellExtension::getInstance()->projectFileExtension();
+
+            m_url.setPath(url.path() + QLatin1Char('/') + safeName);
+            m_urlIsDirectory = false;
+            qCDebug(SHELL) << "project name:" << m_projectName << "file name:" << safeName << "in" << url.path();
+        }
+    }
     validateProjectInfo();
 }
 

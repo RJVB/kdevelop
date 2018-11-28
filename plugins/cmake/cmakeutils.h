@@ -89,6 +89,12 @@ namespace CMake
     KDEVCMAKECOMMON_EXPORT KDevelop::Path currentBuildDir( KDevelop::IProject* project, int builddir = -1 );
 
     /**
+     * @returns the current canonical builddir for the given project or an empty url if none
+     * has been set by the user. See QFileInfo::canonicalFilePath()
+     */
+    KDEVCMAKECOMMON_EXPORT KDevelop::Path currentCanonicalBuildDir( KDevelop::IProject* project, int builddir = -1 );
+
+    /**
      * @returns the path to the 'compile_commands.json' file in the current builddir for the given project
      * or an empty url if none has been set by the user.
      */
@@ -189,6 +195,11 @@ namespace CMake
      * Retrieves the configured build directories for @p project.
      */
     KDEVCMAKECOMMON_EXPORT QStringList allBuildDirs(KDevelop::IProject* project);
+
+    /**
+     * Retrieves the canonical form of the configured build directories for @p project.
+     */
+    KDEVCMAKECOMMON_EXPORT QStringList allCanonicalBuildDirs(KDevelop::IProject* project);
 
     /**
      * Attempts to migrate the CMake configuration to per-builddir format.

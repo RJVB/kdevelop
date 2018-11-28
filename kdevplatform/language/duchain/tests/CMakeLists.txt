@@ -11,6 +11,12 @@ add_target_compile_flag_if_supported(test_identifier PRIVATE -Wno-self-assign-ov
 ecm_add_test(test_stringhelpers.cpp
     LINK_LIBRARIES Qt5::Test KDev::Tests KDev::Language)
 
+set(topcontextstore_SRCS test_topcontextstore.cpp)
+qt5_add_resources(topcontextstore_SRCS test_topcontextstore.qrc)
+ecm_add_test(${topcontextstore_SRCS}
+    TEST_NAME test_topcontextstore
+    LINK_LIBRARIES Qt5::Test KDev::Tests KDev::Language)
+
 if(NOT COMPILER_OPTIMIZATIONS_DISABLED)
     ecm_add_test(bench_hashes.cpp
         LINK_LIBRARIES Qt5::Test KDev::Tests KDev::Language)

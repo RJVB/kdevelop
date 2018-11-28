@@ -85,6 +85,12 @@ if(KF5SysGuard_FOUND)
     )
 endif()
 
+if(UNIX AND NOT APPLE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_link_libraries(kdevdebuggercommon PRIVATE "-pthread")
+    endif()
+endif()
+
 kde_target_enable_exceptions(kdevdebuggercommon PUBLIC)
 
 if(BUILD_TESTING)

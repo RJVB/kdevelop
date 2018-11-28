@@ -30,5 +30,6 @@ perf.data*
 *.LOCAL.*
 *.REMOTE.*
 
+kf5-kdevelop-5@portia.kdev4
 # do not ignore .kdev4 files from test data
 !projectmanagers/custom-buildsystem/tests/projects/**/.kdev4

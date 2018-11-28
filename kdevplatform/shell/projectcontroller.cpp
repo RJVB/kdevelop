@@ -36,6 +36,7 @@ Boston, MA 02110-1301, USA.
 #include <QTemporaryFile>
 #include <QVBoxLayout>
 #include <QTimer>
+#include <QElapsedTimer>
 
 #include <KActionCollection>
 #include <KConfigGroup>
@@ -63,6 +64,7 @@ Boston, MA 02110-1301, USA.
 #include <project/projectchangesmodel.h>
 #include <project/projectmodel.h>
 #include <project/projectbuildsetmodel.h>
+#include <project/abstractfilemanagerplugin.h>
 #include <projectconfigpage.h>
 #include <language/backgroundparser/parseprojectjob.h>
 #include <interfaces/iruncontroller.h>
@@ -108,6 +110,9 @@ public:
     bool m_cleaningUp; //Temporary flag enabled while destroying the project-controller
     ProjectChangesModel* m_changesModel = nullptr;
     QHash< IProject*, QPointer<KJob> > m_parseJobs; // parse jobs that add files from the project to the background parser.
+    QList<IProject*> m_finaliseProjectImports; // project dir watchers and/or parse jobs waiting to be started
+    QHash<IProject*, QElapsedTimer*> m_timers; // TEMPORARY: project load timers
+    static QElapsedTimer m_timer; // TEMPORARY: session-wide project load timer
 
     ProjectControllerPrivate(Core* core, ProjectController* p)
         : m_core(core)
@@ -263,42 +268,37 @@ public:
         m_closeProject->setEnabled(itemCount > 0);
     }
 
-    void openProjectConfig()
+    QList<IProject*> selectedProjects()
     {
-        // if only one project loaded, this is our target
-        IProject *project = (m_projects.count() == 1) ? m_projects.at(0) : nullptr;
-
-        // otherwise base on selection
-        if (!project) {
-            ProjectItemContext* ctx = dynamic_cast<ProjectItemContext*>(ICore::self()->selectionController()->currentSelection());
-            if (ctx && ctx->items().count() == 1) {
-                project = ctx->items().at(0)->project();
-            }
-        }
-
-        if (project) {
-            q->configureProject(project);
-        }
-    }
-
-    void closeSelectedProjects()
-    {
-        QSet<IProject*> projects;
+        QList<IProject*> projects;
 
         // if only one project loaded, this is our target
         if (m_projects.count() == 1) {
-            projects.insert(m_projects.at(0));
+            projects.append(m_projects.at(0));
         } else {
             // otherwise base on selection
             ProjectItemContext* ctx =  dynamic_cast<ProjectItemContext*>(ICore::self()->selectionController()->currentSelection());
             if (ctx) {
                 foreach (ProjectBaseItem* item, ctx->items()) {
-                    projects.insert(item->project());
+                    projects.append(item->project());
                 }
             }
         }
+        return projects;
+    }
 
-        foreach (IProject* project, projects) {
+    void openProjectConfig()
+    {
+        auto projects = selectedProjects();
+
+        if (projects.count() == 1) {
+            q->configureProject(projects.at(0));
+        }
+    }
+
+    void closeSelectedProjects()
+    {
+        foreach (IProject* project, selectedProjects()) {
             q->closeProject(project);
         }
     }
@@ -330,6 +330,11 @@ public:
             return;
         }
 
+        if (!m_timer.isValid()) {
+            m_timer.start();
+            qCWarning(SHELL) << "Starting project import timer";
+        }
+
         foreach( IProject* project, m_projects )
         {
             if ( url == project->projectFile().toUrl() )
@@ -348,6 +353,11 @@ public:
         m_core->pluginControllerInternal()->loadProjectPlugins();
 
         Project* project = new Project();
+        // TEMPORARY: initialise project load timer
+        if (qEnvironmentVariableIsSet("KDEV_PROJECT_DONT_DEFER_PARSING")) {
+            m_timers[project] = new QElapsedTimer;
+            m_timers[project]->start();
+        }
         QObject::connect(project, &Project::aboutToOpen,
                          q, &ProjectController::projectAboutToBeOpened);
         if ( !project->open( Path(url) ) )
@@ -364,6 +374,8 @@ public:
         ac->action(QStringLiteral("commit_current_project"))->setVisible(area->objectName() == QLatin1String("code"));
     }
 };
+
+QElapsedTimer ProjectControllerPrivate::m_timer;
 
 IProjectDialogProvider::IProjectDialogProvider()
 {}
@@ -433,6 +445,9 @@ bool equalProjectFile( const QString& configPath, OpenProjectDialog* dlg )
     KSharedConfigPtr cfg = KSharedConfig::openConfig( configPath, KConfig::SimpleConfig );
     KConfigGroup grp = cfg->group( "Project" );
     QString defaultName = dlg->projectFileUrl().adjusted(QUrl::RemoveFilename | QUrl::StripTrailingSlash).fileName();
+    qCDebug(SHELL) << "configPath=" << configPath << "defaultName=" << defaultName
+        << "projName=" << dlg->projectName() << "projectMan=" << dlg->projectManager()
+        << "grp.Name=" << grp.readEntry( "Name", QString() ) << "grp.Manager=" << grp.readEntry( "Manager", QString() );
     return (grp.readEntry( "Name", QString() ) == dlg->projectName() || dlg->projectName() == defaultName) &&
            grp.readEntry( "Manager", QString() ) == dlg->projectManager();
 }
@@ -448,7 +463,8 @@ QUrl ProjectDialogProvider::askProjectConfigLocation(bool fetch, const QUrl& sta
     }
 
     QUrl projectFileUrl = dlg->projectFileUrl();
-    qCDebug(SHELL) << "selected project:" << projectFileUrl << dlg->projectName() << dlg->projectManager();
+    qCDebug(SHELL) << "selected project:" << projectFileUrl << "selectedUrl=" << dlg->selectedUrl()
+        << "projectName=" << dlg->projectName() << "projectManager=" << dlg->projectManager();
     if ( dlg->projectManager() == QLatin1String("<built-in>") ) {
         return projectFileUrl;
     }
@@ -457,10 +473,17 @@ QUrl ProjectDialogProvider::askProjectConfigLocation(bool fetch, const QUrl& sta
     bool writeProjectConfigToFile = true;
     if( projectFileExists( projectFileUrl ) )
     {
-        // check whether config is equal
-        bool shouldAsk = true;
-        if( projectFileUrl == dlg->selectedUrl() )
+        // check whether we should question the user about overriding an existing project file or not.
+        // We don't need to do that when the file we're importing (dlg->selectedUrl) is already an
+        // existing .kdev4 project file (we just verified that it exists):
+        bool isKDevProject = QFileInfo(dlg->selectedUrl().url()).suffix() == QStringLiteral("kdev4");
+        bool shouldAsk = !isKDevProject;
+        if( !isKDevProject && projectFileUrl == dlg->selectedUrl() )
         {
+            // We're importing a project from another type of project file, post the
+            // override dialog if there's a discrepancy between the project file URL
+            // and the information stored in the dialog and the project settings.
+            qCWarning(SHELL) << "Importing a foreign project type:" << projectFileUrl.url();
             if( projectFileUrl.isLocalFile() )
             {
                 shouldAsk = !equalProjectFile( projectFileUrl.toLocalFile(), dlg );
@@ -500,18 +523,24 @@ QUrl ProjectDialogProvider::askProjectConfigLocation(bool fetch, const QUrl& sta
             } else if ( ret == KMessageBox::Cancel )
             {
                 return QUrl();
-            } // else fall through and write new file
+            } else {
+               // confusion can arise when an existing project is overridden and the old settings
+               // file remains (http://phabricator.kde.org/T6262). The .kdev4 directory can
+               // contain settings files for other projects which shouldn't be deleted, so
+               // we delete just the settings file for this project.
+               Path settingsFile(projectFileUrl);
+               settingsFile.setLastPathSegment(QStringLiteral(".kdev4"));
+               settingsFile.addPath(projectFileUrl.fileName());
+               qCDebug(SHELL) << "Deleting old settings file before overriding it:" << settingsFile;
+               auto delJob = KIO::del(settingsFile.toUrl());
+               delJob->exec();
+            }
         } else {
             writeProjectConfigToFile = false;
         }
     }
 
     if (writeProjectConfigToFile) {
-        Path projectConfigDir(projectFileUrl);
-        projectConfigDir.setLastPathSegment(QStringLiteral(".kdev4"));
-        auto delJob = KIO::del(projectConfigDir.toUrl());
-        delJob->exec();
-
         if (!writeProjectSettingsToConfigFile(projectFileUrl, dlg)) {
             KMessageBox::error(d->m_core->uiControllerInternal()->defaultMainWindow(),
                 i18n("Unable to create configuration file %1", projectFileUrl.url()));
@@ -953,7 +982,39 @@ void ProjectController::projectImportingFinished( IProject* project )
     d->m_currentlyOpening.removeAll(project->projectFile().toUrl());
     emit projectOpened( project );
 
-    reparseProject(project);
+    // don't call reparseProject immediately, defer until all currently opening
+    // projects have been imported. Parsing is done in the background but
+    // importing can block the UI so should be as fast as possible.
+    // TEMPORARY: deferFinalise
+    bool deferFinalise = !qEnvironmentVariableIsSet("KDEV_PROJECT_DONT_DEFER_PARSING");
+    if (d->m_currentlyOpening.isEmpty()) {
+        if (deferFinalise) {
+            qCInfo(SHELL) << "All projects imported in" << ProjectControllerPrivate::m_timer.restart() / 1000.0 << "seconds";
+            reparseProject(project);
+            foreach (const auto p, d->m_finaliseProjectImports) {
+                reparseProject(p);
+            }
+            qCInfo(SHELL) << "\tstarting parse jobs took an additional"
+                << ProjectControllerPrivate::m_timer.elapsed() / 1000.0 << "seconds";
+        }
+        d->m_finaliseProjectImports.clear();
+        ProjectControllerPrivate::m_timer.invalidate();
+    } else {
+        if (deferFinalise) {
+            d->m_finaliseProjectImports.append(project);
+        }
+    }
+    if (!deferFinalise) {
+        QElapsedTimer *timer = d->m_timers[project];
+        qCInfo(SHELL) << "Project" << project->name() << "imported in"
+            << timer->restart() / 1000.0 << "seconds";
+        reparseProject(project);
+        qCInfo(SHELL) << "\t" << project->name()
+            << ": starting parse jobs took an additional"
+            << timer->elapsed() / 1000.0 << "seconds";
+        delete timer;
+        d->m_timers[project] = 0;
+    }
 }
 
 // helper method for closeProject()
@@ -1012,6 +1073,7 @@ void ProjectController::takeProject(IProject* proj)
     // loading might have failed
     d->m_currentlyOpening.removeAll(proj->projectFile().toUrl());
     d->m_projects.removeAll(proj);
+    d->m_finaliseProjectImports.removeAll(proj);
     emit projectClosing(proj);
     //Core::self()->saveSettings();     // The project file is being closed.
                                         // Now we can save settings for all of the Core
@@ -1180,12 +1242,32 @@ ContextMenuExtension ProjectController::contextMenuExtension(Context* ctx, QWidg
 {
     Q_UNUSED(parent);
     ContextMenuExtension ext;
-    if ( ctx->type() != Context::ProjectItemContext || !static_cast<ProjectItemContext*>(ctx)->items().isEmpty() ) {
+    if ( ctx->type() != Context::ProjectItemContext) {
         return ext;
     }
+    if (!static_cast<ProjectItemContext*>(ctx)->items().isEmpty() ) {
+
+        QAction *action = new QAction(this);
+        connect(action, &QAction::triggered, this, [&] {
+            foreach (auto project, d->selectedProjects()) {
+                // can't use reparseProject() here because we need the forceAll argument
+                if (auto job = d->m_parseJobs.value(project)) {
+                    job->kill();
+                }
+                d->m_parseJobs[project] = new KDevelop::ParseProjectJob(project, false, true);
+                ICore::self()->runController()->registerJob(d->m_parseJobs[project]);
+            }
+        });
+
+        action->setText( i18n( "Reparse the Entire Project" ) );
+        ext.addAction(ContextMenuExtension::ProjectGroup, action);
+        return ext;
+    }
+
     ext.addAction(ContextMenuExtension::ProjectGroup, d->m_openProject);
     ext.addAction(ContextMenuExtension::ProjectGroup, d->m_fetchProject);
     ext.addAction(ContextMenuExtension::ProjectGroup, d->m_recentProjectsAction);
+
     return ext;
 }
 

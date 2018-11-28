@@ -26,7 +26,7 @@
 #include "duchain/clanghelpers.h"
 
 #include <language/codecompletion/abstractincludefilecompletionitem.h>
-#include <qtcompat_p.h>
+#include <kdevplatform/qtcompat_p.h>
 
 #include <QDirIterator>
 

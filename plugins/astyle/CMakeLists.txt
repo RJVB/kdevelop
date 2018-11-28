@@ -30,6 +30,12 @@ target_link_libraries(kdevastyle
     KDev::Interfaces
     KDev::Util)
 
+if(UNIX AND NOT APPLE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_link_libraries(kdevastyle "-pthread")
+    endif()
+endif()
+
 add_subdirectory(3rdparty/libastyle)
 if(BUILD_TESTING)
     add_subdirectory(tests)

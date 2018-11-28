@@ -42,6 +42,8 @@
 #include "idealbuttonbarwidget.h"
 #include <debug.h>
 
+#include "kwidgetstyleselector.h"
+
 class IdealToolBar : public QToolBar
 {
     Q_OBJECT
@@ -135,6 +137,10 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *w, Controller* controller)
 
     action = new KActionMenu(i18n("Tool Views"), this);
     ac->addAction(QStringLiteral("docks_submenu"), action);
+
+    KWidgetStyleSelector *styleSelector = new KWidgetStyleSelector(this);
+    KActionMenu *stylesAction = styleSelector->createStyleSelectionMenu();
+    ac->addAction(QStringLiteral("widgetstyle_submenu"), stylesAction);
 
     idealController = new IdealController(m_mainWindow);
 

@@ -30,9 +30,13 @@
 #include <QElapsedTimer>
 #endif
 
+#include "path.h"
+
 namespace KDevelop
 {
     class ProjectFolderItem;
+    class RunControllerProxy;
+    class IProject;
 
 class FileManagerListJob : public KIO::Job
 {
@@ -40,18 +44,24 @@ class FileManagerListJob : public KIO::Job
 
 public:
     explicit FileManagerListJob(ProjectFolderItem* item);
+    virtual ~FileManagerListJob();
     ProjectFolderItem* item() const;
+    IProject* project() const;
+    QQueue<ProjectFolderItem*> itemQueue() const;
+    Path basePath() const;
 
     void addSubDir(ProjectFolderItem* item);
     void removeSubDir(ProjectFolderItem* item);
 
     void abort();
     void start() override;
+    void start(int msDelay);
 
 Q_SIGNALS:
     void entries(FileManagerListJob* job, ProjectFolderItem* baseItem,
                  const KIO::UDSEntryList& entries);
     void nextJob();
+    void watchDir(const QString& path);
 
 private Q_SLOTS:
     void slotEntries(KIO::Job* job, const KIO::UDSEntryList& entriesIn );
@@ -64,6 +74,10 @@ private:
     QQueue<ProjectFolderItem*> m_listQueue;
     /// current base dir
     ProjectFolderItem* m_item;
+    /// current project
+    IProject* m_project;
+    /// entrypoint
+    Path m_basePath;
     KIO::UDSEntryList entryList;
     // kill does not delete the job instantaniously
     QAtomicInt m_aborted;
@@ -73,6 +87,11 @@ private:
     QElapsedTimer m_subTimer;
     qint64 m_subWaited = 0;
 #endif
+    bool m_emitWatchDir;
+    int m_killCount = 0;
+protected:
+    RunControllerProxy* m_rcProxy;
+    friend class RunControllerProxy;
 };
 
 }

@@ -165,7 +165,7 @@ namespace CMake
 
 KDevelop::Path::List resolveSystemDirs(KDevelop::IProject* project, const QStringList& dirs)
 {
-    const KDevelop::Path buildDir(CMake::currentBuildDir(project));
+    const KDevelop::Path buildDir(CMake::currentCanonicalBuildDir(project));
     const KDevelop::Path installDir(CMake::currentInstallDir(project));
 
     KDevelop::Path::List newList;
@@ -199,7 +199,7 @@ KDevelop::Path::List resolveSystemDirs(KDevelop::IProject* project, const QStrin
 bool checkForNeedingConfigure( KDevelop::IProject* project )
 {
     const QString currentRuntime = ICore::self()->runtimeController()->currentRuntime()->name();
-    const KDevelop::Path builddir = currentBuildDir(project);
+    const KDevelop::Path builddir = currentCanonicalBuildDir(project);
     const bool isValid = (buildDirRuntime(project, -1) == currentRuntime || buildDirRuntime(project, -1).isEmpty()) && builddir.isValid();
 
     if( !isValid )
@@ -207,7 +207,7 @@ bool checkForNeedingConfigure( KDevelop::IProject* project )
         CMakeBuildDirChooser bd;
 
         bd.setProject( project );
-        const auto builddirs = CMake::allBuildDirs(project);
+        const auto builddirs = CMake::allCanonicalBuildDirs(project);
         bd.setAlreadyUsed( builddirs );
         bd.setShowAvailableBuildDirs(!builddirs.isEmpty());
         bd.setCMakeExecutable(currentCMakeExecutable(project));
@@ -295,6 +295,17 @@ KDevelop::Path currentBuildDir( KDevelop::IProject* project, int builddir )
     return KDevelop::Path(readBuildDirParameter( project, Config::Specific::buildDirPathKey, QString(), builddir ));
 }
 
+KDevelop::Path currentCanonicalBuildDir( KDevelop::IProject* project, int builddir )
+{
+    const QString buildDir(readBuildDirParameter( project, Config::Specific::buildDirPathKey, QString(), builddir ));
+    const auto info = QFileInfo(buildDir);
+    if (info.exists()) {
+        return KDevelop::Path(info.canonicalFilePath());
+    } else {
+        return KDevelop::Path(buildDir);
+    }
+}
+
 KDevelop::Path commandsFile(KDevelop::IProject* project)
 {
     auto currentBuildDir = CMake::currentBuildDir(project);
@@ -322,7 +333,10 @@ QString currentBuildType( KDevelop::IProject* project, int builddir )
 
 QString findExecutable()
 {
-    auto cmake = QStandardPaths::findExecutable(QStringLiteral("cmake"));
+    auto cmake = QStandardPaths::findExecutable(QStringLiteral("cmake"), QStringList(QStringLiteral("/opt/local/bin")));
+    if (cmake.isEmpty()) {
+        cmake = QStandardPaths::findExecutable(QStringLiteral("cmake"));
+    }
 #ifdef Q_OS_WIN
     if (cmake.isEmpty())
         cmake = QStandardPaths::findExecutable(QStringLiteral("cmake"), {
@@ -363,7 +377,7 @@ KDevelop::Path currentInstallDir( KDevelop::IProject* project, int builddir )
 #ifdef Q_OS_WIN
         QStringLiteral("C:\\Program Files");
 #else
-        QStringLiteral("/usr/local");
+        QStringLiteral("/opt/local");
 #endif
     return KDevelop::Path(readBuildDirParameter( project, Config::Specific::cmakeInstallDirKey, defaultInstallDir, builddir ));
 }
@@ -628,6 +642,22 @@ QStringList allBuildDirs(KDevelop::IProject* project)
     result.reserve(bdCount);
     for (int i = 0; i < bdCount; ++i)
         result += buildDirGroup( project, i ).readEntry( Config::Specific::buildDirPathKey );
+    return result;
+}
+
+QStringList allCanonicalBuildDirs(KDevelop::IProject* project)
+{
+    QStringList result;
+    int bdCount = buildDirCount(project);
+    for (int i = 0; i < bdCount; ++i) {
+        QString buildDir = buildDirGroup( project, i ).readEntry( Config::Specific::buildDirPathKey );
+        const auto info = QFileInfo(buildDir);
+        if (info.exists()) {
+            result += info.canonicalFilePath();
+        } else {
+            result += buildDir;
+        }
+    }
     return result;
 }
 

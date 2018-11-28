@@ -1,3 +1,4 @@
+#define TIME_IMPORT_JOB
 /***************************************************************************
  *   This file is part of KDevelop                                         *
  *   Copyright 2010-2012 Milian Wolff <mail@milianw.de>                    *
@@ -41,6 +42,7 @@
 #include <serialization/indexedstring.h>
 
 #include "projectfiltermanager.h"
+#include "projectwatcher.h"
 #include "debug.h"
 
 #define ifDebug(x)
@@ -74,6 +76,7 @@ class KDevelop::AbstractFileManagerPluginPrivate
 public:
     explicit AbstractFileManagerPluginPrivate(AbstractFileManagerPlugin* qq)
         : q(qq)
+        , m_intreeDirWatching(qEnvironmentVariableIsSet("KDEV_PROJECT_INTREE_DIRWATCHING_MODE"))
     {
     }
 
@@ -83,13 +86,13 @@ public:
      * The just returned must be started in one way or another for this method
      * to have any affect. The job will then auto-delete itself upon completion.
      */
-    Q_REQUIRED_RESULT KIO::Job* eventuallyReadFolder(ProjectFolderItem* item);
+    Q_REQUIRED_RESULT FileManagerListJob* eventuallyReadFolder(ProjectFolderItem* item);
     void addJobItems(FileManagerListJob* job,
                      ProjectFolderItem* baseItem,
                      const KIO::UDSEntryList& entries);
 
     void deleted(const QString &path);
-    void created(const QString &path);
+    void dirty(const QString &path, bool isCreated = false);
 
     void projectClosing(IProject* project);
     void jobFinished(KJob* job);
@@ -103,10 +106,14 @@ public:
 
     void removeFolder(ProjectFolderItem* folder);
 
-    QHash<IProject*, KDirWatch*> m_watchers;
+    QHash<IProject*, ProjectWatcher*> m_watchers;
     QHash<IProject*, QList<FileManagerListJob*> > m_projectJobs;
     QVector<QString> m_stoppedFolders;
     ProjectFilterManager m_filters;
+    // intree dirwatching is the original mode that feeds all files
+    // and directories to the dirwatcher. It takes longer to load but
+    // works better for certain (large) projects that use in-tree builds.
+    bool m_intreeDirWatching;
 };
 
 void AbstractFileManagerPluginPrivate::projectClosing(IProject* project)
@@ -114,11 +121,13 @@ void AbstractFileManagerPluginPrivate::projectClosing(IProject* project)
     if ( m_projectJobs.contains(project) ) {
         // make sure the import job does not live longer than the project
         // see also addLotsOfFiles test
-        foreach( FileManagerListJob* job, m_projectJobs[project] ) {
+        auto jobList = m_projectJobs[project];
+        m_projectJobs.remove(project);
+        foreach( FileManagerListJob* job, jobList ) {
             qCDebug(FILEMANAGER) << "killing project job:" << job;
             job->abort();
         }
-        m_projectJobs.remove(project);
+        jobList.clear();
     }
 #ifdef TIME_IMPORT_JOB
     QElapsedTimer timer;
@@ -129,14 +138,45 @@ void AbstractFileManagerPluginPrivate::projectClosing(IProject* project)
     delete m_watchers.take(project);
 #ifdef TIME_IMPORT_JOB
     if (timer.isValid()) {
-        qCDebug(FILEMANAGER) << "Deleting dir watcher took" << timer.elapsed() / 1000.0 << "seconds for project" << project->name();
+        qCInfo(FILEMANAGER) << "Deleting dir watcher took" << timer.elapsed() / 1000.0 << "seconds for project" << project->name();
     }
 #endif
     m_filters.remove(project);
 }
 
-KIO::Job* AbstractFileManagerPluginPrivate::eventuallyReadFolder(ProjectFolderItem* item)
+FileManagerListJob* AbstractFileManagerPluginPrivate::eventuallyReadFolder(ProjectFolderItem* item)
 {
+    ProjectWatcher* watcher = m_watchers.value( item->project(), nullptr );
+
+    // Before we create a new list job it's a good idea to
+    // walk the list backwards, checking for duplicates and aborting
+    // any previously started jobs loading the same directory.
+    const auto jobList = QList<FileManagerListJob*>(m_projectJobs[item->project()]);
+    auto jobListIt = jobList.constEnd();
+    auto jobListHead = jobList.constBegin();
+    const auto path = item->path().path();
+    while (jobListIt != jobListHead) {
+        auto job = *(--jobListIt);
+        // check the other jobs that are still running (baseItem() != NULL)
+        if (job->basePath().isValid()) {
+            if (job->basePath().path().startsWith(path)) {
+                // this job is already reloading @p item or one of its subdirs: abort it
+                // because the new job will provide a more up-to-date representation.
+                qCDebug(FILEMANAGER) << "aborting old job" << job << "before starting job for" << item->path();
+                m_projectJobs[item->project()].removeOne(job);
+                job->abort();
+            } else if (job->itemQueue().contains(item)) {
+                job->removeSubDir(item);
+                qCDebug(FILEMANAGER) << "unqueueing reload of old job" << job << "before starting one for" << item->path();
+            } else if (job->item() == item) {
+                qCWarning(FILEMANAGER) << "old job" << job << "is already reloading" << item->path();
+                // not much we can do here, we have to return a valid FileManagerListJob.
+            }
+        }
+    }
+
+    // FileManagerListJob detects KDEV_PROJECT_INTREE_DIRWATCHING_MODE itself
+    // this is safe as long as it's not feasible to change our own env. variables
     FileManagerListJob* listJob = new FileManagerListJob( item );
     m_projectJobs[ item->project() ] << listJob;
     qCDebug(FILEMANAGER) << "adding job" << listJob << item << item->path() << "for project" << item->project();
@@ -147,16 +187,23 @@ KIO::Job* AbstractFileManagerPluginPrivate::eventuallyReadFolder(ProjectFolderIt
     q->connect( listJob, &FileManagerListJob::entries,
                 q, [&] (FileManagerListJob* job, ProjectFolderItem* baseItem, const KIO::UDSEntryList& entries) {
                     addJobItems(job, baseItem, entries); } );
+    if (!m_intreeDirWatching) {
+        q->connect( listJob, &FileManagerListJob::watchDir,
+                watcher, [watcher] (const QString& path) {
+                    watcher->addDir(path); } );
+    }
 
+    // set a relevant name (for listing in the runController)
+    listJob->setObjectName(i18n("Reload of %1:%2", item->project()->name(), item->path().toLocalFile()));
     return listJob;
 }
 
 void AbstractFileManagerPluginPrivate::jobFinished(KJob* job)
 {
     FileManagerListJob* gmlJob = qobject_cast<FileManagerListJob*>(job);
-    if (gmlJob) {
+    if (gmlJob && gmlJob->project()) {
         ifDebug(qCDebug(FILEMANAGER) << job << gmlJob << gmlJob->item();)
-        m_projectJobs[ gmlJob->item()->project() ].removeOne( gmlJob );
+        m_projectJobs[ gmlJob->project() ].removeOne( gmlJob );
     } else {
         // job emitted its finished signal from its destructor
         // ensure we don't keep a dangling point in our list
@@ -257,9 +304,13 @@ void AbstractFileManagerPluginPrivate::addJobItems(FileManagerListJob* job,
     }
 }
 
-void AbstractFileManagerPluginPrivate::created(const QString& path_)
+void AbstractFileManagerPluginPrivate::dirty(const QString& path_, bool isCreated)
 {
-    qCDebug(FILEMANAGER) << "created:" << path_;
+    if (isCreated) {
+        qCDebug(FILEMANAGER) << "created:" << path_;
+    } else {
+        qCDebug(FILEMANAGER) << "dirty:" << path_;
+    }
     QFileInfo info(path_);
 
     ///FIXME: share memory with parent
@@ -267,7 +318,7 @@ void AbstractFileManagerPluginPrivate::created(const QString& path_)
     const IndexedString indexedPath(path.pathOrUrl());
     const IndexedString indexedParent(path.parent().pathOrUrl());
 
-    QHashIterator<IProject*, KDirWatch*> it(m_watchers);
+    QHashIterator<IProject*, ProjectWatcher*> it(m_watchers);
     while (it.hasNext()) {
         const auto p = it.next().key();
         if ( !p->projectItem()->model() ) {
@@ -285,7 +336,7 @@ void AbstractFileManagerPluginPrivate::created(const QString& path_)
                 // or if we delete and remove folders consecutively https://bugs.kde.org/show_bug.cgi?id=260741
                 qCDebug(FILEMANAGER) << "force reload of" << path << folder;
                 auto job = eventuallyReadFolder( folder );
-                job->start();
+                job->start(1000);
                 found = true;
             }
             if ( found ) {
@@ -295,18 +346,20 @@ void AbstractFileManagerPluginPrivate::created(const QString& path_)
             // also gets triggered for kate's backup files
             continue;
         }
-        foreach ( ProjectFolderItem* parentItem, p->foldersForPath(indexedParent) ) {
-            if ( info.isDir() ) {
-                ProjectFolderItem* folder = q->createFolderItem( p, path, parentItem );
-                if (folder) {
-                    emit q->folderAdded( folder );
-                    auto job = eventuallyReadFolder( folder );
-                    job->start();
-                }
-            } else {
-                ProjectFileItem* file = q->createFileItem( p, path, parentItem );
-                if (file) {
-                    emit q->fileAdded( file );
+        if (isCreated) {
+            foreach ( ProjectFolderItem* parentItem, p->foldersForPath(indexedParent) ) {
+                if ( info.isDir() ) {
+                    ProjectFolderItem* folder = q->createFolderItem( p, path, parentItem );
+                    if (folder) {
+                        emit q->folderAdded( folder );
+                        auto job = eventuallyReadFolder( folder );
+                        job->start(1000);
+                    }
+                } else {
+                    ProjectFileItem* file = q->createFileItem( p, path, parentItem );
+                    if (file) {
+                        emit q->fileAdded( file );
+                    }
                 }
             }
         }
@@ -330,7 +383,7 @@ void AbstractFileManagerPluginPrivate::deleted(const QString& path_)
     const Path path(QUrl::fromLocalFile(path_));
     const IndexedString indexed(path.pathOrUrl());
 
-    QHashIterator<IProject*, KDirWatch*> it(m_watchers);
+    QHashIterator<IProject*, ProjectWatcher*> it(m_watchers);
     while (it.hasNext()) {
         const auto p = it.next().key();
         if (path == p->path()) {
@@ -440,11 +493,16 @@ void AbstractFileManagerPluginPrivate::removeFolder(ProjectFolderItem* folder)
     foreach(FileManagerListJob* job, m_projectJobs[folder->project()]) {
         if (isChildItem(folder, job->item())) {
             qCDebug(FILEMANAGER) << "killing list job for removed folder" << job << folder->path();
+            m_projectJobs[folder->project()].removeOne(job);
             job->abort();
-            Q_ASSERT(!m_projectJobs.value(folder->project()).contains(job));
         } else {
             job->removeSubDir(folder);
         }
+    }
+    if (!m_intreeDirWatching && folder->path().isLocalFile()) {
+        ProjectWatcher* watcher = m_watchers.value(folder->project(), nullptr);
+        Q_ASSERT(watcher);
+        watcher->removeDir(folder->path().toLocalFile());
     }
     folder->parent()->removeRow( folder->row() );
 }
@@ -487,14 +545,19 @@ ProjectFolderItem *AbstractFileManagerPlugin::import( IProject *project )
 
     ///TODO: check if this works for remote files when something gets changed through another KDE app
     if ( project->path().isLocalFile() ) {
-        auto watcher = new KDirWatch( project );
+        auto watcher = new ProjectWatcher(project);
 
-        // set up the signal handling
-        connect(watcher, &KDirWatch::created,
-                this, [&] (const QString& path_) { d->created(path_); });
+        // set up the signal handling; feeding the dirwatcher is handled by FileManagerListJob.
         connect(watcher, &KDirWatch::deleted,
                 this, [&] (const QString& path_) { d->deleted(path_); });
-        watcher->addDir(project->path().toLocalFile(), KDirWatch::WatchSubDirs | KDirWatch:: WatchFiles );
+        if (d->m_intreeDirWatching) {
+            connect(watcher, &KDirWatch::created,
+                this, [&] (const QString& path_) { d->dirty(path_, true); });
+            watcher->addDir(project->path().toLocalFile(), KDirWatch::WatchSubDirs | KDirWatch:: WatchFiles );
+        } else {
+            connect(watcher, &KDirWatch::dirty,
+                this, [&] (const QString& path_) { d->dirty(path_); });
+        }
         d->m_watchers[project] = watcher;
     }
 

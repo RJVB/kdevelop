@@ -70,6 +70,13 @@ void TestAssistants::initTestCase()
         "kdevelop.plugins.clang.debug=true\n"
     ));
     QVERIFY(qputenv("KDEV_CLANG_DISPLAY_DIAGS", "1"));
+    // Set TMPDIR to the canonical version of QDir::tempPath(); this equals
+    // setting TMPDIR to the canonical representation of itself on systems
+    // where this variable is set (on Mac it is likely to be set to a path
+    // containing a symlink).
+    // Doing this prevents DocumentController problems when QTemporaryDir
+    // returns a path containing a symlink.
+    qputenv("TMPDIR", QFileInfo(QDir::tempPath()).canonicalFilePath().toUtf8().constData());
     AutoTestShell::init({QStringLiteral("kdevclangsupport"), QStringLiteral("kdevproblemreporter")});
     TestCore::initialize();
     DUChain::self()->disablePersistentStorage();
@@ -200,7 +207,13 @@ private:
     {
         Core::self()->documentController()->openDocument(url);
         DUChain::self()->waitForUpdate(IndexedString(url), KDevelop::TopDUContext::AllDeclarationsAndContexts);
-        return Core::self()->documentController()->documentForUrl(url)->textDocument();
+        const auto doc = Core::self()->documentController()->documentForUrl(url);
+        if (doc) {
+            return doc->textDocument();
+        } else {
+            qCritical() << "DocumentController:documentForUrl() returns NULL for" << url;
+            return nullptr;
+        }
     }
 
     IncludeBehavior m_includeBehavior;

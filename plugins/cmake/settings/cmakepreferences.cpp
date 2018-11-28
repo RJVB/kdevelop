@@ -332,7 +332,7 @@ void CMakePreferences::removeBuildDir()
     if(curr < 0)
         return;
 
-    Path removedPath = CMake::currentBuildDir( m_project );
+    Path removedPath = CMake::currentCanonicalBuildDir( m_project );
     QString removed = removedPath.toLocalFile();
     if(QDir(removed).exists())
     {

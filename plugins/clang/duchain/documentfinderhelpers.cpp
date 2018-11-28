@@ -181,7 +181,8 @@ QStringList mimeTypesList()
         QStringLiteral("text/x-c++hdr"),
         QStringLiteral("text/x-csrc"),
         QStringLiteral("text/x-c++src"),
-        QStringLiteral("text/x-objcsrc")
+        QStringLiteral("text/x-objcsrc"),
+        QStringLiteral("text/x-objc++src")
     };
     return mimeTypes;
 }
