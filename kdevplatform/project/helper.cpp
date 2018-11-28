@@ -221,12 +221,12 @@ bool KDevelop::copyPath(const KDevelop::IProject* project, const KDevelop::Path&
 Path KDevelop::proposedBuildFolder(const Path& sourceFolder)
 {
     Path proposedBuildFolder;
-    const QString customDirScript = QStandardPaths::findExecutable("kdevelop-custom-build-dir");
+    const QString customDirScript = QStandardPaths::findExecutable(QStringLiteral("kdevelop-custom-build-dir"));
     if (!customDirScript.isEmpty()) {
         QProcess customDirHelper;
         customDirHelper.start(customDirScript, QStringList() << sourceFolder.path());
         if (customDirHelper.waitForFinished()) {
-            const QString customDir = customDirHelper.readAllStandardOutput().trimmed();
+            const QString customDir = QString::fromUtf8(customDirHelper.readAllStandardOutput().trimmed());
             if (!customDir.isEmpty() && QDir(customDir).exists()) {
                 return Path(customDir);
             } else {

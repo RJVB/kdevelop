@@ -173,6 +173,9 @@ bool ProjectManagerView::eventFilter(QObject* obj, QEvent* event)
                 }
                 break;
             }
+            default:
+                // noop
+                break;
         }
     }
     return QObject::eventFilter(obj, event);
