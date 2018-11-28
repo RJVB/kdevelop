@@ -367,8 +367,9 @@ void ClangParseJob::run(ThreadWeaver::JobPointer /*self*/, ThreadWeaver::Thread*
                 // otherwise no editor component is open for this document and we can dispose
                 // the TU to save memory
                 // share the session data with all contexts that are pinned to this TU
-                DUChainWriteLocker lock;
-                context->setAst(IAstContainer::Ptr(session.data()));
+//                 DUChainWriteLocker lock;
+//                 context->setAst(IAstContainer::Ptr(session.data()));
+                // qWarning() << Q_FUNC_INFO << "Not caching session for" << context->url();
             }
             languageSupport()->codeHighlighting()->highlightDUChain(context);
         }

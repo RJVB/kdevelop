@@ -44,6 +44,9 @@
 #include <QMimeType>
 
 #include <algorithm>
+#ifdef Q_OS_UNIX
+#include <unistd.h>
+#endif
 
 using namespace KDevelop;
 
@@ -330,10 +333,16 @@ ParseSessionData::ParseSessionData(const QVector<UnsavedFile>& unsavedFiles, Cla
     } else {
         qCWarning(KDEV_CLANG) << "Failed to parse translation unit:" << tuUrl;
     }
+#ifdef Q_OS_UNIX
+    // it should be safe now to unlink the file behind Qt's back so that
+    // it is guaranteed to be deleted when KDevelop exists, cleanly or not.
+    unlink(m_definesFile.fileName().toUtf8().constData());
+#endif
 }
 
 ParseSessionData::~ParseSessionData()
 {
+    // qWarning() << Q_FUNC_INFO << "tr.unit" << m_unit << "m_definesFile=" << m_definesFile.fileName() << "m_file=" << clang_getCString(clang_getFileName(m_file));
     clang_disposeTranslationUnit(m_unit);
 }
 
@@ -366,6 +375,7 @@ QByteArray ParseSessionData::writeDefinesFile(const QMap<QString, QString>& defi
             << f.readAll() << f.size()
             << "\n VS defines:" << defines.size() << "\n";
     }
+    m_definesFile.close();
 
     return m_definesFile.fileName().toUtf8();
 }
