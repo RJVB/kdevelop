@@ -336,7 +336,7 @@ ParseSessionData::ParseSessionData(const QVector<UnsavedFile>& unsavedFiles, Cla
 #ifdef Q_OS_UNIX
     // it should be safe now to unlink the file behind Qt's back so that
     // it is guaranteed to be deleted when KDevelop exists, cleanly or not.
-    unlink(m_definesFile.fileName().toUtf8().constData());
+    //unlink(m_definesFile.fileName().toUtf8().constData());
 #endif
 }
 
