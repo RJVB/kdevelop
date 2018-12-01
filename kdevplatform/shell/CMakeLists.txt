@@ -159,6 +159,10 @@ PRIVATE
 if(APPLE)
     target_link_libraries(KDevPlatformShell PRIVATE "-framework AppKit")
 endif()
+if(UNIX)
+    target_link_libraries(KDevPlatformShell PRIVATE "-pthreads")
+endif()
+
 
 install(FILES
     mainwindow.h

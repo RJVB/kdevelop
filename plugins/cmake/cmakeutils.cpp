@@ -18,6 +18,7 @@
  * 02110-1301, USA.
  */
 
+#include "config-kdevelop.h"
 #include "cmakeutils.h"
 #include "cmakeprojectdata.h"
 
@@ -333,7 +334,7 @@ QString currentBuildType( KDevelop::IProject* project, int builddir )
 
 QString findExecutable()
 {
-    auto cmake = QStandardPaths::findExecutable(QStringLiteral("cmake"), QStringList(QStringLiteral("/opt/local/bin")));
+    auto cmake = QStandardPaths::findExecutable(QStringLiteral("cmake"), QStringList(QStringLiteral(KDEVELOP_INSTALL_PREFIX"/bin")));
     if (cmake.isEmpty()) {
         cmake = QStandardPaths::findExecutable(QStringLiteral("cmake"));
     }
@@ -373,13 +374,13 @@ KDevelop::Path currentCMakeExecutable(KDevelop::IProject* project, int builddir)
 
 KDevelop::Path currentInstallDir( KDevelop::IProject* project, int builddir )
 {
-    const QString defaultInstallDir =
-#ifdef Q_OS_WIN
-        QStringLiteral("C:\\Program Files");
-#else
-        QStringLiteral("/opt/local");
-#endif
-    return KDevelop::Path(readBuildDirParameter( project, Config::Specific::cmakeInstallDirKey, defaultInstallDir, builddir ));
+//     const QString defaultInstallDir =
+// #ifdef Q_OS_WIN
+//         QStringLiteral("C:\\Program Files");
+// #else
+//         QStringLiteral(KDEVELOP_INSTALL_PREFIX);
+// #endif
+    return KDevelop::Path(readBuildDirParameter( project, Config::Specific::cmakeInstallDirKey, QString(), builddir ));
 }
 
 QString projectRootRelative( KDevelop::IProject* project )
