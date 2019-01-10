@@ -775,7 +775,7 @@ void TopDUContextDynamicData::store() {
       totalBytes += nBytes;
       totalElapsed += elapsed / 1000.0;
       if (totalBytes && totalElapsed >= 0.5) {
-        qCInfo(LANGUAGE) << "Stored" << totalBytes << "topcontext bytes at" << totalBytes / totalElapsed << "bytes/second";
+        qCDebug(LANGUAGE) << "Stored" << totalBytes << "topcontext bytes at" << totalBytes / totalElapsed << "bytes/second";
         totalBytes = 0, totalElapsed = 0.0;
       }
     }

@@ -262,7 +262,7 @@ public:
       if (s_envExists) {
           s_lmdbEnv.close();
           s_envExists = false;
-          delete s_lz4State;
+          delete s_lz4CompState;
           printCompRatio();
       }
     }
@@ -286,7 +286,7 @@ public:
                     s_mapSize = stat.me_mapsize;
                 }
                 s_lmdbEnv.set_mapsize(s_mapSize);
-                s_lz4State = new char[LZ4_sizeofState()];
+                s_lz4CompState = new char[LZ4_sizeofState()];
                 s_envExists = true;
                 qCDebug(LANGUAGE) << "s_lmdbEnv=" << s_lmdbEnv << "mapsize=" << stat.me_mapsize << "LZ4 state buffer:" << LZ4_sizeofState();
             } catch (const lmdb::error &e) {
@@ -317,7 +317,7 @@ public:
 
     static lmdb::env s_lmdbEnv;
     static bool s_envExists;
-    static char* s_lz4State;
+    static char* s_lz4CompState;
     static size_t s_mapSize;
     static QString s_errorString;
 };
@@ -325,7 +325,7 @@ static LMDBHook LMDB;
 
 lmdb::env LMDBHook::s_lmdbEnv{nullptr};
 bool LMDBHook::s_envExists = false;
-char *LMDBHook::s_lz4State = nullptr;
+char *LMDBHook::s_lz4CompState = nullptr;
 // set the initial map size to 64Mb
 size_t LMDBHook::s_mapSize = 1024UL * 1024UL * 64UL;
 QString LMDBHook::s_errorString;
@@ -384,7 +384,7 @@ void TopDUContextLMDB::commit()
             data = new char[lz4BufLen + sizeof(qint64)];
             // compress to an qint64-sized offset into the dest buffer; the original size will be stored in
             // those first 64 bits.
-            dataLen = LZ4_compress_fast_extState(LMDB.s_lz4State, m_currentValue.constData(), &data[sizeof(qint64)],
+            dataLen = LZ4_compress_fast_extState(LMDB.s_lz4CompState, m_currentValue.constData(), &data[sizeof(qint64)],
               m_currentLen, lz4BufLen, 1);
             if (dataLen && dataLen + sizeof(qint64) < m_currentLen) {
                 LZ4Frame frame;
@@ -479,7 +479,9 @@ bool TopDUContextLMDB::getCurrentKeyValue()
                     if (orgSize > 0 && frame.qint32Ptr[1] == compressedSize) {
                         // size m_currentValue so decompression can go into the final destination directly
                         m_currentValue.resize(orgSize);
-                        if (LZ4_decompress_safe(&frame.bytes[sizeof(qint64)], m_currentValue.data(), compressedSize, orgSize) == orgSize) {
+                        const auto decompSize = LZ4_decompress_safe(&frame.bytes[sizeof(qint64)],
+                            m_currentValue.data(), compressedSize, orgSize);
+                        if (decompSize == orgSize) {
                             isRaw = false;
                             m_currentLen = m_currentValue.size();
                         } else {
