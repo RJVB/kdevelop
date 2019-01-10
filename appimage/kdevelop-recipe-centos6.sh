@@ -32,8 +32,9 @@ if [ -z "$KDEV_CLANG_TIDY_VERSION" ]; then
 fi
 KF5_VERSION=v5.51.0
 KDE_PLASMA_VERSION=v5.13.4 # note: need libksysguard commit a0e69617442d720c76da5ebe3323e7a977929db4 (patch which makes plasma dep optional)
-KDE_APPLICATION_VERSION=v18.08.0
+KDE_APPLICATION_VERSION=v18.12.0
 GRANTLEE_VERSION=v5.1.0
+OKTETA_VERSION=v0.25.5
 
 export LLVM_ROOT=/opt/llvm/
 export PATH=/opt/rh/python27/root/usr/bin/:$PATH
@@ -93,6 +94,8 @@ function build_project
 { (
     PROJECT=$1
     VERSION=$2
+    shift
+    shift
 
     # clone if not there
     mkdir -p $SRC
@@ -135,7 +138,7 @@ function build_project
     cd $BUILD/$PROJECT
 
     # cmake it
-    cmake3 $SRC/$PROJECT -G Ninja -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX:PATH=$PREFIX $3
+    cmake3 $SRC/$PROJECT -G Ninja -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX:PATH=$PREFIX $@
 
     # make
     ninja
@@ -146,12 +149,14 @@ function build_project
 
 function build_framework
 { (
-    build_project $1 $KF5_VERSION $2
+    PROJECT=$1
+    shift
+    build_project $PROJECT $KF5_VERSION $@
 ) }
 
 # KDE Frameworks
 if [ -z "$SKIP_FRAMEWORKS" ]; then
-build_framework extra-cmake-modules
+build_framework extra-cmake-modules -DBUILD_HTML_DOCS=OFF -DBUILD_MAN_DOCS=OFF
 
 build_framework kconfig
 build_framework kguiaddons
@@ -204,6 +209,7 @@ build_project breeze $KDE_PLASMA_VERSION
 build_project libkomparediff2 $KDE_APPLICATION_VERSION
 build_project kate $KDE_APPLICATION_VERSION # for snippet plugin, see T3826
 build_project konsole $KDE_APPLICATION_VERSION
+build_project okteta $OKTETA_VERSION -DBUILD_DESIGNERPLUGIN=OFF -DBUILD_OKTETAKASTENLIBS=OFF
 
 # Extra
 (CUSTOM_GIT_URL=https://github.com/steveire/grantlee.git PATCH_FILE=$SCRIPT_DIR/grantlee_avoid_recompilation.patch build_project grantlee $GRANTLEE_VERSION)
@@ -222,7 +228,7 @@ build_project kdev-clang-tidy $KDEV_CLANG_TIDY_VERSION
 
 # Install some colorschemes
 cd $BUILD
-$SCRIPT_DIR/../release-scripts/install_colorschemes.py /kdevelop.appdir/usr/share
+$SRC/kdevelop/release-scripts/install_colorschemes.py /kdevelop.appdir/usr/share
 
 cd /kdevelop.appdir
 
@@ -342,9 +348,11 @@ rm -f usr/lib/libstdc* usr/lib/libgobject* usr/lib/libc.so.* || true
 rm -rf usr/include || true
 rm -rf usr/lib/cmake || true
 rm -rf usr/lib/pkgconfig || true
+rm -rf usr/mkspecs || true
 rm -rf usr/share/ECM/ || true
 rm -rf usr/share/gettext || true
 rm -rf usr/share/pkgconfig || true
+rm -rf usr/etc/xdg/*.categories || true
 
 strip -g $(find usr/bin usr/lib -type f) || true
 
@@ -370,6 +378,13 @@ rm -f ./usr/bin/pyenv*
 rm -f ./usr/bin/verify-uselistorder
 rm -f ./usr/bin/obj2yaml ./usr/bin/yaml2obj
 rm -f ./usr/bin/kwrite ./usr/bin/kate
+
+# remove unused registration data
+rm -rf ./usr/share/applications/ || true
+
+# remove all appdata besides kdevelop one
+rm -f ./usr/share/metainfo/org.kde.{breezedark.desktop,kate,kwrite,konsole}.appdata.xml
+rm -f ./usr/share/metainfo/org.kde.kdev-{php,python}.metainfo.xml
 
 cp /kdevelop.appdir/usr/lib/libexec/kf5/* /kdevelop.appdir/usr/bin/
 
@@ -425,10 +440,10 @@ EOF
 chmod +x AppRun
 
 # use normal desktop file, but remove actions, not yet handled by appimaged & Co
-cp $SRC/kdevelop/app/org.kde.kdevelop.desktop kdevelop.desktop
-sed -i -e '/^Actions=/d;/^\[Desktop Action /Q' kdevelop.desktop
+cp $SRC/kdevelop/app/org.kde.kdevelop.desktop org.kde.kdevelop.desktop
+sed -i -e '/^Actions=/d;/^\[Desktop Action /Q' org.kde.kdevelop.desktop
 
-cp $SRC/kdevelop/app/icons/48-apps-kdevelop.png kdevelop.png
+cp $SRC/kdevelop/app/icons/256-apps-kdevelop.png kdevelop.png
 cp -R /usr/lib/python3.6 /kdevelop.appdir/usr/lib/
 rm -Rf /kdevelop.appdir/usr/lib/python3.6/{test,config-3.5m,__pycache__,site-packages,lib-dynload,distutils,idlelib,unittest,tkinter,ensurepip}
 
@@ -436,8 +451,9 @@ mkdir -p /kdevelop.appdir/usr/share/kdevelop/
 
 # Breeze cruft
 cp $BUILD/breeze-icons/icons/breeze-icons.rcc /kdevelop.appdir/usr/share/kdevelop/icontheme.rcc
-rm -Rf /kdevelop.appdir/usr/share/icons/breeze* # not needed because of the rcc
+rm -Rf /kdevelop.appdir/usr/share/icons/{B,b}reeze* # not needed because of the rcc
 rm -Rf /kdevelop.appdir/usr/share/wallpapers
+rm -Rf /kdevelop.appdir/usr/share/plasma
 
 rm -f /kdevelop.appdir/usr/bin/llvm*
 rm -f /kdevelop.appdir/usr/bin/clang*

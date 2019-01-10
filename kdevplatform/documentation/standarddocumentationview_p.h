@@ -39,6 +39,8 @@ class StandardDocumentationPage;
 class StandardDocumentationViewPrivate
 {
 public:
+    ~StandardDocumentationViewPrivate();
+
     ZoomController* m_zoomController = nullptr;
     IDocumentation::Ptr m_doc;
     StandardDocumentationView* m_parent;

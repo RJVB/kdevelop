@@ -140,6 +140,15 @@ bool StandardDocumentationView::loadResource(int type, QUrl& url, QVariant& cont
     return false;
 }
 
+StandardDocumentationViewPrivate::~StandardDocumentationViewPrivate()
+{
+#if !defined(USE_QTEXTBROWSER) && !defined(USE_QTWEBKIT)
+    // make sure the page is deleted before the profile
+    // see https://doc.qt.io/qt-5/qwebenginepage.html#QWebEnginePage-1
+    delete m_page;
+#endif
+}
+
 #ifndef USE_QTEXTBROWSER
 // code specific to the QtWebKit/QtWebEngine variant
 
