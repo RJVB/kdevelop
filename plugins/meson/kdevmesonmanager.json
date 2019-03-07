@@ -1,0 +1,48 @@
+{
+    "KPlugin": {
+        "Category": "Project Management",
+        "Description": "Imports and edits Meson projects",
+        "Description[ca@valencia]": "Importa i edita projectes del Meson",
+        "Description[ca]": "Importa i edita projectes del Meson",
+        "Description[es]": "Importa y edita proyectos Meson",
+        "Description[gl]": "Importa e edita proxectos Meson",
+        "Description[it]": "Importa e modifica i progetti Meson",
+        "Description[nl]": "Importeert en bewerkt Meson-projecten",
+        "Description[pl]": "Importuje i edytuje projekty Meson",
+        "Description[pt]": "Importa e edita os projectos do Meson",
+        "Description[sv]": "Importerar och redigerar Meson-projekt",
+        "Description[uk]": "Імпортує і дає змогу редагувати проекти Meson",
+        "Description[x-test]": "xxImports and edits Meson projectsxx",
+        "Icon": "meson",
+        "Id": "KDevMesonManager",
+        "Name": "Meson Project Manager",
+        "Name[ca@valencia]": "Gestor de projectes Meson",
+        "Name[ca]": "Gestor de projectes Meson",
+        "Name[es]": "Gestor de proyectos Meson",
+        "Name[gl]": "Xestor de proxectos Meson",
+        "Name[it]": "Gestore progetto Meson",
+        "Name[nl]": "Meson projectbeheerder",
+        "Name[pl]": "Zarządzanie projektem Meson",
+        "Name[pt]": "Gestor de Projectos do Meson",
+        "Name[sv]": "Meson projekthanterare",
+        "Name[uk]": "Керування проектами Meson",
+        "Name[x-test]": "xxMeson Project Managerxx",
+        "ServiceTypes": [
+            "KDevelop/Plugin"
+        ]
+    },
+    "X-KDevelop-Category": "Project",
+    "X-KDevelop-FileManager": "Meson",
+    "X-KDevelop-IRequired": [
+        "org.kdevelop.IProjectBuilder"
+    ],
+    "X-KDevelop-Interfaces": [
+        "org.kdevelop.IBuildSystemManager",
+        "org.kdevelop.IProjectFileManager"
+    ],
+    "X-KDevelop-Mode": "NoGUI",
+    "X-KDevelop-ProjectFilesFilter": [
+        "meson.build"
+    ],
+    "X-KDevelop-ProjectFilesFilterDescription": "Meson Project Files"
+}

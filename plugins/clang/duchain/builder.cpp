@@ -1204,7 +1204,7 @@ CXChildVisitResult Visitor::buildParmDecl(CXCursor cursor)
 CXChildVisitResult Visitor::buildUse(CXCursor cursor)
 {
     m_uses[m_parentContext->context].push_back(cursor);
-    return cursor.kind == CXCursor_DeclRefExpr || cursor.kind == CXCursor_MemberRefExpr || cursor.kind == CXCursor_ObjCMessageExpr?
+    return cursor.kind == CXCursor_DeclRefExpr || cursor.kind == CXCursor_MemberRefExpr || cursor.kind == CXCursor_ObjCMessageExpr ?
         CXChildVisit_Recurse : CXChildVisit_Continue;
 }
 

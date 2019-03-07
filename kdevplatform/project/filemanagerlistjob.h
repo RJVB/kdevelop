@@ -43,19 +43,40 @@ class FileManagerListJob : public KIO::Job
     Q_OBJECT
 
 public:
-    explicit FileManagerListJob(ProjectFolderItem* item);
+    /**
+     * KIO::Job variant that lists the files in a project folder. The list
+     * is generated recursively unless @a recursive==false and the folder
+     * has already been indexed.
+     **/
+    explicit FileManagerListJob(ProjectFolderItem* item, bool recursive = true);
     virtual ~FileManagerListJob();
     ProjectFolderItem* item() const;
     IProject* project() const;
     QQueue<ProjectFolderItem*> itemQueue() const;
     Path basePath() const;
 
-    void addSubDir(ProjectFolderItem* item);
+    void addSubDir(ProjectFolderItem* item, bool forceRecursive = false);
     void removeSubDir(ProjectFolderItem* item);
 
     void abort();
     void start() override;
     void start(int msDelay);
+    bool started() const { return m_started; }
+
+    /**
+     * will/should this job recurse over all subdirs?
+     */
+    bool isRecursive() const { return m_recursive; }
+    void setRecursive(bool enabled);
+
+    /**
+     * Is/should this be a job that can be aborted, for
+     * instance when it's not been started on the user's
+     * explicit request?
+     * Jobs are never disposable by default.
+     */
+    bool isDisposable() const { return m_disposable; }
+    void setDisposable(bool enabled);
 
 Q_SIGNALS:
     void entries(FileManagerListJob* job, ProjectFolderItem* baseItem,
@@ -89,6 +110,9 @@ private:
 #endif
     bool m_emitWatchDir;
     int m_killCount = 0;
+    bool m_recursive;
+    bool m_started;
+    bool m_disposable;
 protected:
     RunControllerProxy* m_rcProxy;
     friend class RunControllerProxy;

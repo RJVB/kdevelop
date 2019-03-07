@@ -86,7 +86,7 @@ public:
      * The just returned must be started in one way or another for this method
      * to have any affect. The job will then auto-delete itself upon completion.
      */
-    Q_REQUIRED_RESULT FileManagerListJob* eventuallyReadFolder(ProjectFolderItem* item);
+    Q_REQUIRED_RESULT FileManagerListJob* eventuallyReadFolder(ProjectFolderItem* item, bool recursive = true);
     void addJobItems(FileManagerListJob* job,
                      ProjectFolderItem* baseItem,
                      const KIO::UDSEntryList& entries);
@@ -144,42 +144,53 @@ void AbstractFileManagerPluginPrivate::projectClosing(IProject* project)
     m_filters.remove(project);
 }
 
-FileManagerListJob* AbstractFileManagerPluginPrivate::eventuallyReadFolder(ProjectFolderItem* item)
+FileManagerListJob* AbstractFileManagerPluginPrivate::eventuallyReadFolder(ProjectFolderItem* item, bool recursive)
 {
-    ProjectWatcher* watcher = m_watchers.value( item->project(), nullptr );
+    IProject* project = item->project();
+    ProjectWatcher* watcher = m_watchers.value( project, nullptr );
 
     // Before we create a new list job it's a good idea to
     // walk the list backwards, checking for duplicates and aborting
     // any previously started jobs loading the same directory.
-    const auto jobList = QList<FileManagerListJob*>(m_projectJobs[item->project()]);
+    const auto jobList = QList<FileManagerListJob*>(m_projectJobs[project]);
     auto jobListIt = jobList.constEnd();
     auto jobListHead = jobList.constBegin();
     const auto path = item->path().path();
     while (jobListIt != jobListHead) {
         auto job = *(--jobListIt);
         // check the other jobs that are still running (baseItem() != NULL)
-        if (job->basePath().isValid()) {
-            if (job->basePath().path().startsWith(path)) {
+        // abort them if justified, but only if marked as disposable (= jobs
+        // started in reaction to a KDirWatch change notification).
+        if (job->basePath().isValid() && (job->isDisposable() || !job->started())) {
+            const auto jobPath = job->basePath().path();
+            if (jobPath == path || (job->isRecursive() && jobPath.startsWith(path))) {
                 // this job is already reloading @p item or one of its subdirs: abort it
                 // because the new job will provide a more up-to-date representation.
+                // Annoyingly pure watching of only directory change often gives multiple
+                // dirty signals in succession.
                 qCDebug(FILEMANAGER) << "aborting old job" << job << "before starting job for" << item->path();
-                m_projectJobs[item->project()].removeOne(job);
+                m_projectJobs[project].removeOne(job);
                 job->abort();
             } else if (job->itemQueue().contains(item)) {
                 job->removeSubDir(item);
                 qCDebug(FILEMANAGER) << "unqueueing reload of old job" << job << "before starting one for" << item->path();
             } else if (job->item() == item) {
                 qCWarning(FILEMANAGER) << "old job" << job << "is already reloading" << item->path();
-                // not much we can do here, we have to return a valid FileManagerListJob.
+                if (job->started()) {
+                    // not much more we can do here, we have to return a valid FileManagerListJob.
+                    job->setRecursive(false);
+                } else {
+                    job->abort();
+                }
             }
         }
     }
 
     // FileManagerListJob detects KDEV_PROJECT_INTREE_DIRWATCHING_MODE itself
     // this is safe as long as it's not feasible to change our own env. variables
-    FileManagerListJob* listJob = new FileManagerListJob( item );
-    m_projectJobs[ item->project() ] << listJob;
-    qCDebug(FILEMANAGER) << "adding job" << listJob << item << item->path() << "for project" << item->project();
+    FileManagerListJob* listJob = new FileManagerListJob( item, recursive );
+    m_projectJobs[ project ] << listJob;
+    qCDebug(FILEMANAGER) << "adding job" << listJob << item << item->path() << "for project" << project;
 
     q->connect( listJob, &FileManagerListJob::finished,
                 q, [&] (KJob* job) { jobFinished(job); } );
@@ -194,7 +205,7 @@ FileManagerListJob* AbstractFileManagerPluginPrivate::eventuallyReadFolder(Proje
     }
 
     // set a relevant name (for listing in the runController)
-    listJob->setObjectName(i18n("Reload of %1:%2", item->project()->name(), item->path().toLocalFile()));
+    listJob->setObjectName(i18n("Reload of %1:%2", project->name(), item->path().toLocalFile()));
     return listJob;
 }
 
@@ -299,7 +310,8 @@ void AbstractFileManagerPluginPrivate::addJobItems(FileManagerListJob* job,
         ProjectFolderItem* folder = q->createFolderItem( baseItem->project(), path, baseItem );
         if (folder) {
             emit q->folderAdded( folder );
-            job->addSubDir( folder );
+            // new folder, so ignore the job's recursion setting.
+            job->addSubDir( folder, true );
         }
     }
 }
@@ -334,8 +346,14 @@ void AbstractFileManagerPluginPrivate::dirty(const QString& path_, bool isCreate
             foreach ( ProjectFolderItem* folder, p->foldersForPath(indexedPath) ) {
                 // exists already in this project, happens e.g. when we restart the dirwatcher
                 // or if we delete and remove folders consecutively https://bugs.kde.org/show_bug.cgi?id=260741
+                // or when a change is signalled in the directory contents.
                 qCDebug(FILEMANAGER) << "force reload of" << path << folder;
-                auto job = eventuallyReadFolder( folder );
+                // schedule a reload, a priori non-recursively because we have already been
+                // listed and the current change notification is not for one of our subfolders.
+                // The recursion setting will be overridden if the change notification is for
+                // newly created directories.
+                auto job = eventuallyReadFolder( folder, false );
+                job->setDisposable(true);
                 job->start(1000);
                 found = true;
             }
@@ -353,6 +371,7 @@ void AbstractFileManagerPluginPrivate::dirty(const QString& path_, bool isCreate
                     if (folder) {
                         emit q->folderAdded( folder );
                         auto job = eventuallyReadFolder( folder );
+                        job->setDisposable(true);
                         job->start(1000);
                     }
                 } else {

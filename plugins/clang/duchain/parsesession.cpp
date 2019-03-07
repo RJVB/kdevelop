@@ -35,6 +35,8 @@
 
 #include <language/duchain/duchainlock.h>
 #include <language/duchain/duchain.h>
+#include <interfaces/icore.h>
+#include <interfaces/iprojectcontroller.h>
 
 #include <KShell>
 
@@ -93,7 +95,6 @@ void sanitizeArguments(QVector<QByteArray>& arguments)
 QVector<QByteArray> argsForSession(const QString& path, ParseSessionData::Options options, const ParserSettings& parserSettings)
 {
     QMimeDatabase db;
-    QString mimeType = db.mimeTypeForFile(path).name();
     // TODO: No proper mime type detection possible yet
     // cf. https://bugs.freedesktop.org/show_bug.cgi?id=26913
     if (path.endsWith(QLatin1String(".cl"), Qt::CaseInsensitive)) {
@@ -109,19 +110,12 @@ QVector<QByteArray> argsForSession(const QString& path, ParseSessionData::Option
         return result;
     }
 
+    auto result = parserSettings.toClangAPI();
     if (parserSettings.parserOptions.isEmpty()) {
         // The parserOptions can be empty for some unit tests that use ParseSession directly
-        auto defaultArguments = ClangSettingsManager::self()->parserSettings(path).toClangAPI();
-
-        defaultArguments.append(QByteArrayLiteral("-nostdinc"));
-        defaultArguments.append(QByteArrayLiteral("-nostdinc++"));
-        defaultArguments.append(QByteArrayLiteral("-xc++"));
-
-        sanitizeArguments(defaultArguments);
-        return defaultArguments;
+        result = ClangSettingsManager::self()->parserSettings(path).toClangAPI();
     }
 
-    auto result = parserSettings.toClangAPI();
     result.append(QByteArrayLiteral("-nostdinc"));
     if (parserSettings.isCpp()) {
         result.append(QByteArrayLiteral("-nostdinc++"));
@@ -134,6 +128,9 @@ QVector<QByteArray> argsForSession(const QString& path, ParseSessionData::Option
         return result;
     }
 
+    // check the C family membership and set the appropriate mode
+    // overriding any inappropriate modes set earlier in the args list.
+    const auto mimeType = db.mimeTypeForFile(path).name();
     if (mimeType == QStringLiteral("text/x-objc++src")) {
         result.append(QByteArrayLiteral("-xobjective-c++"));
     } else if (mimeType == QStringLiteral("text/x-objcsrc")) {
@@ -227,13 +224,15 @@ ParseSessionData::ParseSessionData(const QVector<UnsavedFile>& unsavedFiles, Cla
         flags |= CXTranslationUnit_ForSerialization;
     } else {
         flags |= CXTranslationUnit_CacheCompletionResults
-#if CINDEX_VERSION_MINOR >= 32
-              |  CXTranslationUnit_CreatePreambleOnFirstParse
-#endif
               |  CXTranslationUnit_PrecompiledPreamble;
         if (environment.quality() == ClangParsingEnvironment::Unknown) {
             flags |= CXTranslationUnit_Incomplete;
         }
+    }
+    if (!ICore::self()->projectController()->parseAllProjectSources()) {
+#if CINDEX_VERSION_MINOR >= 32
+        flags |= CXTranslationUnit_CreatePreambleOnFirstParse;
+#endif
     }
 
     const auto tuUrl = environment.translationUnitUrl();

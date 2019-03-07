@@ -111,13 +111,19 @@ public:
     {
         QAction* externalOpenAction = nullptr;
 // this is how opening links in an external viewer (e.g. Qt's Assistant) could be implemented
+#ifdef QTHELPEXTERNALASSISTANT_H
         if (QtHelpExternalAssistant::self()->hasExternalViewer()) {
             externalOpenAction = menu->addAction(title);
             externalOpenAction->setData(link.toString());
-            connect(externalOpenAction, &QAction::triggered, this, [this, externalOpenAction] () {
+            connect(externalOpenAction, &QAction::triggered, this, [externalOpenAction] () {
                     QtHelpExternalAssistant::openUrl(QUrl(externalOpenAction->data().toString()));
                 } );
         }
+#else
+        Q_UNUSED(menu);
+        Q_UNUSED(title);
+        Q_UNUSED(link);
+#endif
         return externalOpenAction;
     }
 #endif

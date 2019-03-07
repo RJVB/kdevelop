@@ -24,6 +24,7 @@
 
 #include "path.h"
 #include "debug.h"
+#include "indexedstring.h"
 // KF
 #include <kio_version.h>
 // Qt
@@ -82,12 +83,15 @@ public:
     FileManagerListJob* m_proxied;
 };
 
-FileManagerListJob::FileManagerListJob(ProjectFolderItem* item)
+FileManagerListJob::FileManagerListJob(ProjectFolderItem* item, bool recursive)
     : KIO::Job(), m_item(item), m_project(item->project())
     // cache *a copy* of the item info, without parent info so we own it completely
     , m_basePath(item->path())
     , m_aborted(false)
     , m_emitWatchDir(!qEnvironmentVariableIsSet("KDEV_PROJECT_INTREE_DIRWATCHING_MODE"))
+    , m_recursive(true) // sic!
+    , m_started(false)
+    , m_disposable(false)
     , m_rcProxy(nullptr)
 {
     qRegisterMetaType<KIO::UDSEntryList>("KIO::UDSEntryList");
@@ -100,6 +104,8 @@ FileManagerListJob::FileManagerListJob(ProjectFolderItem* item)
     connect( this, &FileManagerListJob::nextJob, this, &FileManagerListJob::startNextJob, Qt::QueuedConnection );
 
     addSubDir(item);
+    // now we can set m_recursive to the requested value
+    m_recursive = recursive;
 
 #ifdef TIME_IMPORT_JOB
     m_timer.start();
@@ -138,9 +144,13 @@ Path FileManagerListJob::basePath() const
     return m_basePath;
 }
 
-void FileManagerListJob::addSubDir( ProjectFolderItem* item )
+void FileManagerListJob::addSubDir( ProjectFolderItem* item, bool forceRecursive )
 {
     if (m_aborted) {
+        return;
+    }
+    if (!m_recursive && !forceRecursive) {
+        qCDebug(FILEMANAGER) << "Ignoring known subdir" << item->path() << "because non-recursive";
         return;
     }
 
@@ -193,7 +203,7 @@ void FileManagerListJob::startNextJob()
                 emit watchDir(path.toLocalFile());
             }
             KIO::UDSEntryList results;
-            std::transform(entries.begin(), entries.end(), std::back_inserter(results), [] (const QFileInfo& info) -> KIO::UDSEntry {
+            std::transform(entries.begin(), entries.end(), std::back_inserter(results), [=] (const QFileInfo& info) -> KIO::UDSEntry {
                 KIO::UDSEntry entry;
 #if KIO_VERSION < QT_VERSION_CHECK(5,48,0)
                 entry.insert(KIO::UDSEntry::UDS_NAME, info.fileName());
@@ -303,6 +313,9 @@ void FileManagerListJob::abort()
 
 void FileManagerListJob::start(int msDelay)
 {
+    if (m_aborted) {
+        return;
+    }
     if (msDelay > 0) {
         QTimer::singleShot(msDelay, this, SLOT(start()));
     } else {
@@ -312,8 +325,22 @@ void FileManagerListJob::start(int msDelay)
 
 void FileManagerListJob::start()
 {
+    if (m_aborted) {
+        return;
+    }
     if (!m_rcProxy) {
         m_rcProxy = new RunControllerProxy(this);
     }
     startNextJob();
+    m_started = true;
+}
+
+void FileManagerListJob::setRecursive(bool enabled)
+{
+    m_recursive = enabled;
+}
+
+void FileManagerListJob::setDisposable(bool enabled)
+{
+    m_disposable = enabled;
 }

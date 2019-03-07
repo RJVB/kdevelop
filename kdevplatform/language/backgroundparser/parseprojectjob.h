@@ -28,8 +28,14 @@ namespace KDevelop {
 class ReferencedTopDUContext;
 class IProject;
 
-///A job that parses all project-files in the given project
-///Deletes itself as soon as the project is deleted
+///A job that parses all project-files in the given project either
+///when KDevelop is configured to parse all files at project import
+///(see ProjectController:parseAllProjectSources()) or when the
+///forceAll argument is true. That forceAll argument allows to
+///trigger a full project reparse after the initial import, e.g.
+///via the project manager's context menu.
+///ParseProjectJob instances delete themselves as soon as the project
+///is deleted or when a new job is started.
 class KDEVPLATFORMLANGUAGE_EXPORT ParseProjectJob : public KJob
 {
     Q_OBJECT
@@ -48,7 +54,6 @@ private:
 
 private:
     const QScopedPointer<class ParseProjectJobPrivate> d;
-    bool forceAll;
 };
 
 }

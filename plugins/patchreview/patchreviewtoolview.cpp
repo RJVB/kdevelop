@@ -303,7 +303,6 @@ void PatchReviewToolView::showEditDialog() {
 #ifdef WITH_PURPOSE
     m_exportMenu = new Purpose::Menu(this);
     connect(m_exportMenu, &Purpose::Menu::finished, this, [](const QJsonObject &output, int error, const QString &message) {
-        qWarning() << Q_FUNC_INFO << "Purpose finished with output" << output << "error=" << error;
         if (error==0) {
             KMessageBox::information(nullptr, i18n("<qt>You can find the new request at:<br /><a href='%1'>%1</a> </qt>", output[QLatin1String("url")].toString()),
                                     QString(), QString(), KMessageBox::AllowLink);

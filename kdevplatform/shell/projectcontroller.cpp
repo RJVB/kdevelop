@@ -268,19 +268,19 @@ public:
         m_closeProject->setEnabled(itemCount > 0);
     }
 
-    QList<IProject*> selectedProjects()
+    QSet<IProject*> selectedProjects()
     {
-        QList<IProject*> projects;
+        QSet<IProject*> projects;
 
         // if only one project loaded, this is our target
         if (m_projects.count() == 1) {
-            projects.append(m_projects.at(0));
+            projects.insert(m_projects.at(0));
         } else {
             // otherwise base on selection
-            ProjectItemContext* ctx =  dynamic_cast<ProjectItemContext*>(ICore::self()->selectionController()->currentSelection());
+            ProjectItemContext* ctx = dynamic_cast<ProjectItemContext*>(ICore::self()->selectionController()->currentSelection());
             if (ctx) {
                 foreach (ProjectBaseItem* item, ctx->items()) {
-                    projects.append(item->project());
+                    projects.insert(item->project());
                 }
             }
         }
@@ -292,7 +292,7 @@ public:
         auto projects = selectedProjects();
 
         if (projects.count() == 1) {
-            q->configureProject(projects.at(0));
+            q->configureProject(*projects.constBegin());
         }
     }
 
@@ -815,7 +815,8 @@ void ProjectController::openProjectForUrl(const QUrl& sourceUrl) {
             d->m_foundProjectFile = false;
             return;
         }
-        QUrl oldTest = testAt.adjusted(QUrl::RemoveFilename);
+        QUrl oldTest = testAt;
+        testAt = testAt.adjusted(QUrl::RemoveFilename);
         if(oldTest == testAt)
             break;
     }
@@ -1250,12 +1251,7 @@ ContextMenuExtension ProjectController::contextMenuExtension(Context* ctx, QWidg
         QAction *action = new QAction(this);
         connect(action, &QAction::triggered, this, [&] {
             foreach (auto project, d->selectedProjects()) {
-                // can't use reparseProject() here because we need the forceAll argument
-                if (auto job = d->m_parseJobs.value(project)) {
-                    job->kill();
-                }
-                d->m_parseJobs[project] = new KDevelop::ParseProjectJob(project, false, true);
-                ICore::self()->runController()->registerJob(d->m_parseJobs[project]);
+                reparseProject(project, true, true);
             }
         });
 
@@ -1367,13 +1363,13 @@ QString ProjectController::mapSourceBuild( const QString& path_, bool reverse, b
     return QString();
 }
 
-void ProjectController::reparseProject( IProject* project, bool forceUpdate )
-{
+    void KDevelop::ProjectController::reparseProject(IProject *project, bool forceUpdate, bool forceAll)
+    {
     if (auto job = d->m_parseJobs.value(project)) {
         job->kill();
     }
 
-    d->m_parseJobs[project] = new KDevelop::ParseProjectJob(project, forceUpdate);
+    d->m_parseJobs[project] = new KDevelop::ParseProjectJob(project, forceUpdate, forceAll);
     ICore::self()->runController()->registerJob(d->m_parseJobs[project]);
 }
 

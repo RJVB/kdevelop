@@ -96,7 +96,7 @@ void CodeCompletionModel::setForceWaitForModel(bool wait)
 
 CodeCompletionModel::CodeCompletionModel( QObject * parent )
   : KTextEditor::CodeCompletionModel(parent)
-  , m_forceWaitForModel(false)
+  , m_forceWaitForModel(true)
   , m_fullCompletion(true)
   , m_mutex(new QMutex)
   , m_thread(nullptr)
