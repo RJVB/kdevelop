@@ -374,12 +374,6 @@ KDevelop::Path currentCMakeExecutable(KDevelop::IProject* project, int builddir)
 
 KDevelop::Path currentInstallDir( KDevelop::IProject* project, int builddir )
 {
-//     const QString defaultInstallDir =
-// #ifdef Q_OS_WIN
-//         QStringLiteral("C:\\Program Files");
-// #else
-//         QStringLiteral(KDEVELOP_INSTALL_PREFIX);
-// #endif
     return KDevelop::Path(readBuildDirParameter( project, Config::Specific::cmakeInstallDirKey, QString(), builddir ));
 }
 

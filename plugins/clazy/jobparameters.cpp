@@ -170,18 +170,12 @@ JobParameters::JobParameters(KDevelop::IProject* project, const QString& checkPa
             return;
         }
 
-        if (m_checkPath == projectRootPath || canonicalPathToCheck == projectCanonicalRootPath) {
+        if (canonicalPathToCheck == projectCanonicalRootPath) {
             m_sources = allFiles;
         } else {
             for (auto& file : allFiles) {
                 if (checkPathIsFile) {
-                    if (file == m_checkPath) {
-                        m_sources.clear();
-                        // handle this separately so users don't see a filename they might not be expecting to see.
-                        m_sources += m_checkPath;
-                        break;
-                    }
-                    else if (file == canonicalPathToCheck) {
+                    if (file == canonicalPathToCheck) {
                         m_sources.clear();
                         m_sources += canonicalPathToCheck;
                         break;

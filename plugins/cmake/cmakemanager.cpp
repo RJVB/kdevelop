@@ -149,9 +149,9 @@ public:
     }
 
     void start() override {
-        server = new CMakeServer(project);
-        connect(server, &CMakeServer::connected, this, &ChooseCMakeInterfaceJob::successfulConnection);
-        connect(server, &CMakeServer::finished, this, &ChooseCMakeInterfaceJob::failedConnection);
+        server.reset(new CMakeServer(project));
+        connect(server.data(), &CMakeServer::connected, this, &ChooseCMakeInterfaceJob::successfulConnection);
+        connect(server.data(), &CMakeServer::finished, this, &ChooseCMakeInterfaceJob::failedConnection);
     }
 
 private:
@@ -170,8 +170,7 @@ private:
         Q_ASSERT(code > 0);
         Q_ASSERT(!server->isServerAvailable());
 
-        server->deleteLater();
-        server = nullptr;
+        qCDebug(CMAKE) << "CMake does not provide server mode, using compile_commands.json to import" << project->name();
 
         qCWarning(CMAKE) << "CMake server not available, using compile_commands.json to import" << project->name();
 
@@ -194,7 +193,7 @@ private:
         ExecuteCompositeJob::start();
     }
 
-    CMakeServer* server = nullptr;
+    QSharedPointer<CMakeServer> server;
     IProject* const project;
     CMakeManager* const manager;
 };
@@ -347,6 +346,9 @@ static void populateTargets(ProjectFolderItem* folder, const QHash<KDevelop::Pat
         if (idx < 0) {
             delete item;
         } else {
+            auto cmakeItem = dynamic_cast<CMakeTargetItem*>(item);
+            if (cmakeItem)
+                cmakeItem->setBuiltUrl(dirTargets[idx].artifacts.value(0));
             dirTargets.removeAt(idx);
         }
     }
