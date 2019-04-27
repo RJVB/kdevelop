@@ -262,7 +262,7 @@ public:
       if (s_envExists) {
           s_lmdbEnv.close();
           s_envExists = false;
-          delete s_lz4CompState;
+          delete[] s_lz4CompState;
           printCompRatio();
       }
     }
