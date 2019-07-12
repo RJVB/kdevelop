@@ -290,6 +290,9 @@ void FileManagerListJob::handleResults(const KIO::UDSEntryList& entriesIn)
 
 void FileManagerListJob::abort()
 {
+    if (m_aborted) {
+        return;
+    }
     m_aborted = true;
     m_listQueue.clear();
 

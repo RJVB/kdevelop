@@ -964,13 +964,21 @@ class Bucket {
     /// @param index the index of an item @return The index of the next item in the chain of items with a same local hash, or zero
     inline unsigned short followerIndex(unsigned short index) const {
 //       Q_ASSERT(index >= 2);
-      return (index >= 2) ? *reinterpret_cast<unsigned short*>(m_data+(index-2)) : 0;
+      if (index >= 2) {
+        return *reinterpret_cast<unsigned short*>(m_data+(index-2));
+      } else {
+        qWarning() << Q_FUNC_INFO << "index=" << index << "; returning 0";
+        return 0;
+      }
     }
 
     void setFollowerIndex(unsigned short index, unsigned short follower) {
 //       Q_ASSERT(index >= 2);
-      if (index >= 2)
+      if (index >= 2) {
         *reinterpret_cast<unsigned short*>(m_data+(index-2)) = follower;
+      } else {
+        qWarning() << Q_FUNC_INFO << "index=" << index << "; follower set to 0 instead of" << follower;
+      }
     }
     // Only returns the current value if the item is actually free
     inline unsigned short freeSize(unsigned short index) const {

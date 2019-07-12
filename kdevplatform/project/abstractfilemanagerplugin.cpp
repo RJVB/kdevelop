@@ -31,6 +31,7 @@
 #ifdef TIME_IMPORT_JOB
 #include <QElapsedTimer>
 #endif
+#include <QPointer>
 
 #include <KMessageBox>
 #include <KLocalizedString>
@@ -71,6 +72,8 @@ ProjectFolderItem* parentFolder(ProjectBaseItem* item)
 
 //BEGIN Private
 
+typedef QPointer<FileManagerListJob> FileManagerListJobPtr;
+
 class KDevelop::AbstractFileManagerPluginPrivate
 {
 public:
@@ -107,7 +110,7 @@ public:
     void removeFolder(ProjectFolderItem* folder);
 
     QHash<IProject*, ProjectWatcher*> m_watchers;
-    QHash<IProject*, QList<FileManagerListJob*> > m_projectJobs;
+    QHash<IProject*, QList<FileManagerListJobPtr> > m_projectJobs;
     QVector<QString> m_stoppedFolders;
     ProjectFilterManager m_filters;
     // intree dirwatching is the original mode that feeds all files
@@ -124,8 +127,10 @@ void AbstractFileManagerPluginPrivate::projectClosing(IProject* project)
         auto jobList = m_projectJobs[project];
         m_projectJobs.remove(project);
         foreach( FileManagerListJob* job, jobList ) {
-            qCDebug(FILEMANAGER) << "killing project job:" << job;
-            job->abort();
+            if (job) {
+                qCDebug(FILEMANAGER) << "killing project job:" << job;
+                job->abort();
+            }
         }
         jobList.clear();
     }
@@ -152,7 +157,7 @@ FileManagerListJob* AbstractFileManagerPluginPrivate::eventuallyReadFolder(Proje
     // Before we create a new list job it's a good idea to
     // walk the list backwards, checking for duplicates and aborting
     // any previously started jobs loading the same directory.
-    const auto jobList = QList<FileManagerListJob*>(m_projectJobs[project]);
+    const auto jobList = m_projectJobs[project];
     auto jobListIt = jobList.constEnd();
     auto jobListHead = jobList.constBegin();
     const auto path = item->path().path();
@@ -161,7 +166,7 @@ FileManagerListJob* AbstractFileManagerPluginPrivate::eventuallyReadFolder(Proje
         // check the other jobs that are still running (baseItem() != NULL)
         // abort them if justified, but only if marked as disposable (= jobs
         // started in reaction to a KDirWatch change notification).
-        if (job->basePath().isValid() && (job->isDisposable() || !job->started())) {
+        if (job && job->basePath().isValid() && (job->isDisposable() || !job->started())) {
             const auto jobPath = job->basePath().path();
             if (jobPath == path || (job->isRecursive() && jobPath.startsWith(path))) {
                 // this job is already reloading @p item or one of its subdirs: abort it
@@ -510,12 +515,14 @@ void AbstractFileManagerPluginPrivate::removeFolder(ProjectFolderItem* folder)
 {
     ifDebug(qCDebug(FILEMANAGER) << "removing folder:" << folder << folder->path();)
     foreach(FileManagerListJob* job, m_projectJobs[folder->project()]) {
-        if (isChildItem(folder, job->item())) {
-            qCDebug(FILEMANAGER) << "killing list job for removed folder" << job << folder->path();
-            m_projectJobs[folder->project()].removeOne(job);
-            job->abort();
-        } else {
-            job->removeSubDir(folder);
+        if (job) {
+            if (isChildItem(folder, job->item())) {
+                qCDebug(FILEMANAGER) << "killing list job for removed folder" << job << folder->path();
+                m_projectJobs[folder->project()].removeOne(job);
+                job->abort();
+            } else {
+                job->removeSubDir(folder);
+            }
         }
     }
     if (!m_intreeDirWatching && folder->path().isLocalFile()) {

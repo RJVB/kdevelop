@@ -188,6 +188,8 @@ bool CorePrivate::initialize(Core::Setup mode, const QString& session )
     }
     m_tmpDir->mkpath(tmpLocation);
     if (m_tmpDir->exists()) {
+        // make the directory exclusive to us. 
+        QFile::setPermissions(tmpLocation, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
         qputenv("TMPDIR", tmpLocation.toLatin1());
     }
 #endif

@@ -387,7 +387,18 @@ public:
 
     // qCDebug(LANGUAGE) << "duchain: removing document" << context->url().str();
     Q_ASSERT(hasChainForIndex(index));
+    if (!hasChainForIndex(index)) {
+        qCCritical(LANGUAGE) << Q_FUNC_INFO << "index" << index << "has no chain";
+        return;
+    }
     Q_ASSERT(m_chainsByUrl.contains(context->url(), context));
+    if (!m_chainsByUrl.contains(context->url(), context)) {
+        qCCritical(LANGUAGE) << Q_FUNC_INFO << "Context" << context << "has no registered chainByUrl";
+        if (context) {
+            qCritical() << "\t" << "url=" << context->url();
+        }
+        return;
+    }
 
     m_chainsByUrl.remove(context->url(), context);
 
@@ -400,6 +411,10 @@ public:
     l.relock();
 
     Q_ASSERT(hasChainForIndex(index));
+    if (!hasChainForIndex(index)) {
+        qCCritical(LANGUAGE) << Q_FUNC_INFO << "index" << index << "has no chain";
+        return;
+    }
 
     QMutexLocker lock(&DUChain::chainsByIndexLock);
     DUChain::chainsByIndex[index] = nullptr;
@@ -1489,9 +1504,11 @@ void DUChain::documentClosed(IDocument* document)
 
   IndexedString url(document->url());
 
-  foreach(const ReferencedTopDUContext &top, sdDUChainPrivate->m_openDocumentContexts)
-    if(top && top->url() == url)
+  foreach(const ReferencedTopDUContext &top, sdDUChainPrivate->m_openDocumentContexts) {
+    if(!top || (sdDUChainPrivate->m_referenceCounts[top] == 0 || top->url() == url)) {
       sdDUChainPrivate->m_openDocumentContexts.remove(top);
+    }
+  }
 }
 
 void DUChain::documentLoadedPrepare(KDevelop::IDocument* doc)
@@ -1672,6 +1689,20 @@ void DUChain::refCountDown(TopDUContext* top) {
   if (!refCount) {
     sdDUChainPrivate->m_referenceCounts.erase(it);
   }
+}
+
+// https://bugs.kde.org/show_bug.cgi?id=379004
+void DUChain::releaseReference(ReferencedTopDUContext* top) {
+  {
+      QMutexLocker l(&sdDUChainPrivate->m_referenceCountsMutex);
+      auto it = sdDUChainPrivate->m_referenceCounts.find(top->data());
+      if (it == sdDUChainPrivate->m_referenceCounts.end()) {
+        return;
+      }
+      sdDUChainPrivate->m_referenceCounts.erase(it);
+  }
+  const ReferencedTopDUContext ref = *top;
+  sdDUChainPrivate->m_openDocumentContexts.remove(ref);
 }
 
 void DUChain::emitDeclarationSelected(const DeclarationPointer& decl)
