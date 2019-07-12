@@ -56,7 +56,13 @@ StandardDocumentationView::StandardDocumentationView(DocumentationFindWidget* fi
     connect(findWidget, &DocumentationFindWidget::searchFinished, this, &StandardDocumentationView::finishSearch);
 }
 
-KDevelop::StandardDocumentationView::~StandardDocumentationView() = default;
+KDevelop::StandardDocumentationView::~StandardDocumentationView()
+{
+#if !defined(USE_QTEXTBROWSER)
+    // Prevent getting a loadFinished() signal on destruction.
+    disconnect(d->m_view, nullptr, this, nullptr);
+#endif
+}
 
 void StandardDocumentationView::initZoom(const QString& configSubGroup)
 {
@@ -265,9 +271,9 @@ void StandardDocumentationViewPrivate::setup()
     m_parent->connect(m_view, &QWebView::loadFinished, m_parent, [this](bool) {
         if (m_view->url().isValid()) {
             m_view->page()->mainFrame()->scrollToAnchor(m_view->url().fragment());
-        }
+         }
         m_view->setUpdatesEnabled(true);
-    });
+     });
 #endif
 }
 
