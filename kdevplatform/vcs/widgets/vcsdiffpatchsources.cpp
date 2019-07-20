@@ -80,6 +80,7 @@ VCSCommitDiffPatchSource::VCSCommitDiffPatchSource(VCSDiffUpdater* updater)
     // Given the widget margins that requires 74 actual characters.
     editor->setMinWidth(editor->fontMetrics().width(QString(74, QLatin1Char('m'))));
     m_vcs->setupCommitMessageEditor(updater->url(), editor);
+    editor->setCheckSpellingEnabled(false);
 
     QHBoxLayout* titleLayout = new QHBoxLayout;
     QLabel *label = new QLabel(i18n("Commit Message:"));

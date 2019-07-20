@@ -62,6 +62,8 @@ GitMessageHighlighter::GitMessageHighlighter(QTextEdit* parent): Sonnet::Highlig
             + QStringLiteral("\n") + QString(lineLenLimit, QLatin1Char('_'))
             + QStringLiteral("\n") + QString(lineLenLimit, QLatin1Char('_')));
     }
+    setAutomatic(false);
+    setActive(false);
 }
 
 GitMessageHighlighter::~GitMessageHighlighter()
