@@ -111,8 +111,12 @@ public:
             menu->addAction(action);
         }
         if (menu != lastShownMenu.data()) {
-            qCDebug(SHELL) << "Added items to new contextmenu" << menu;
+            if (lastShownMenuSet) {
+                // don't warn about setting the cache for the 1st time
+                qCWarning(SHELL) << "Added items to new contextmenu" << menu;
+            }
             lastShownMenu = menu;
+            lastShownMenuSet = true;
         }
 
         menu->setTearOffEnabled(true);
@@ -124,6 +128,7 @@ public:
     // can share the same context menu instance.
     QMenu* addedContextMenu;
     QPointer<QMenu> lastShownMenu;
+    bool lastShownMenuSet = false;
 };
 
 class TextDocumentPrivate
