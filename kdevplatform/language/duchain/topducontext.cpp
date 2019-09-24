@@ -54,20 +54,29 @@ Utils::BasicSetRepository* RecursiveImportRepository::repository()
 
 ReferencedTopDUContext::ReferencedTopDUContext(TopDUContext* context) : m_topContext(context)
 {
-    if (m_topContext)
+    if (m_topContext) {
+        m_topContext->addReference(this);
         DUChain::self()->refCountUp(m_topContext);
+    }
 }
 
 ReferencedTopDUContext::ReferencedTopDUContext(const ReferencedTopDUContext& rhs) : m_topContext(rhs.m_topContext)
 {
-    if (m_topContext)
+    if (m_topContext) {
+        m_topContext->addReference(this);
         DUChain::self()->refCountUp(m_topContext);
+    }
 }
 
 ReferencedTopDUContext::~ReferencedTopDUContext()
 {
-    if (m_topContext && !DUChain::deleted())
-        DUChain::self()->refCountDown(m_topContext);
+    if (m_topContext && !DUChain::deleted()) {
+        auto topContext = m_topContext;
+        m_topContext = nullptr;
+        topContext->removeReference(this);
+        DUChain::self()->refCountDown(topContext);
+        DUChain::self()->releaseReference(this);
+    }
 }
 
 ReferencedTopDUContext& ReferencedTopDUContext::operator=(const ReferencedTopDUContext& rhs)
@@ -75,13 +84,17 @@ ReferencedTopDUContext& ReferencedTopDUContext::operator=(const ReferencedTopDUC
     if (m_topContext == rhs.m_topContext)
         return *this;
 
-    if (m_topContext)
+    if (m_topContext) {
         DUChain::self()->refCountDown(m_topContext);
+        m_topContext->removeReference(this);
+    }
 
     m_topContext = rhs.m_topContext;
 
-    if (m_topContext)
+    if (m_topContext) {
         DUChain::self()->refCountUp(m_topContext);
+        m_topContext->addReference(this);
+    }
     return *this;
 }
 
@@ -572,6 +585,11 @@ QExplicitlySharedDataPointer<ParsingEnvironmentFile> TopDUContext::parsingEnviro
 TopDUContext::~TopDUContext()
 {
     m_dynamicData->m_deleting = true;
+    foreach(ReferencedTopDUContext *ref, m_references) {
+        // ref may not be dynamically allocated so just "unregister" the topContext
+        ref->m_topContext = nullptr;
+    }
+    m_references.clear();
 
     //Clear the AST, so that the 'feature satisfaction' cache is eventually updated
     clearAst();
@@ -1224,4 +1242,17 @@ IndexedString TopDUContext::url() const
 {
     return d_func()->m_url;
 }
+
+void TopDUContext::addReference(ReferencedTopDUContext* ref)
+{
+    QMutexLocker l(&m_referencesMutex);
+    m_references.insert(ref);
+}
+
+void TopDUContext::removeReference(ReferencedTopDUContext* ref)
+{
+    QMutexLocker l(&m_referencesMutex);
+    m_references.remove(ref);
+}
+
 }
