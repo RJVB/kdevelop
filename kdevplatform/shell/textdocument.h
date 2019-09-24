@@ -89,7 +89,6 @@ private:
 
     void newDocumentStatus(KTextEditor::Document*);
     void populateContextMenu(KTextEditor::View*, QMenu*);
-    void unpopulateContextMenu();
     void textChanged(KTextEditor::Document*);
     void documentUrlChanged(KTextEditor::Document*);
     void slotDocumentLoaded();
