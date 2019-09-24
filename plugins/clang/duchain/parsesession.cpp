@@ -36,6 +36,8 @@
 #include <language/duchain/duchainlock.h>
 #include <language/duchain/duchain.h>
 #include <language/codegen/coderepresentation.h>
+#include <interfaces/icore.h>
+#include <interfaces/iprojectcontroller.h>
 
 #include <KShell>
 
@@ -220,13 +222,15 @@ ParseSessionData::ParseSessionData(const QVector<UnsavedFile>& unsavedFiles, Cla
         flags |= CXTranslationUnit_ForSerialization;
     } else {
         flags |= CXTranslationUnit_CacheCompletionResults
-#if CINDEX_VERSION_MINOR >= 32
-              |  CXTranslationUnit_CreatePreambleOnFirstParse
-#endif
               |  CXTranslationUnit_PrecompiledPreamble;
         if (environment.quality() == ClangParsingEnvironment::Unknown) {
             flags |= CXTranslationUnit_Incomplete;
         }
+    }
+    if (!ICore::self()->projectController()->parseAllProjectSources()) {
+#if CINDEX_VERSION_MINOR >= 32
+        flags |= CXTranslationUnit_CreatePreambleOnFirstParse;
+#endif
     }
 
     const auto tuUrl = environment.translationUnitUrl();
