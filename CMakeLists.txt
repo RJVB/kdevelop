@@ -8,9 +8,20 @@ set(KDEVELOP_SOVERSION 54)
 # plugin version as used e.g. in plugin installation path
 set(KDEV_PLUGIN_VERSION 32)
 
+option(KDEVELOP_BUILD_IDE "Build the IDE" ON)
+option(KDEVELOP_BUILD_CLANG_PARSER "Build the Clang-based C/C++ parser (formerly kdev-clang)" ON)
+
 # we need some parts of the ECM CMake helpers
 find_package (ECM 5.28.0 REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${KDevelop_SOURCE_DIR}/cmake/modules ${ECM_MODULE_PATH})
+
+if (NOT KDEVELOP_BUILD_IDE)
+    if (NOT KDEVELOP_BUILD_CLANG_PARSER)
+        message(FATAL_ERROR "KDEVELOP_BUILD_IDE and KDEVELOP_BUILD_CLANG_PARSER cannot both be OFF!")
+    else()
+        message(WARNING "Invoke make in ${CMAKE_CURRENT_BINARY_DIR}/plugins/clang in order to build only kdev-clang!")
+    endif()
+endif()
 
 include(KDEInstallDirs)
 include(KDECMakeSettings)
@@ -175,7 +186,15 @@ if(GIT_FULL_VERSION)
 endif()
 configure_file(kdevelop_fullversion.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/kdevelop_fullversion.h)
 
-add_subdirectory(kdevplatform)
+if (KDEVELOP_BUILD_IDE)
+    add_subdirectory(kdevplatform)
+else()
+    message(STATUS "Checking for installed KDevPlatform v${KDevelop_VERSION_MAJOR}.${KDevelop_VERSION_MINOR}.${KDevelop_VERSION_PATCH}")
+    find_package(KDevPlatform ${KDevelop_VERSION_MAJOR}.${KDevelop_VERSION_MINOR}.${KDevelop_VERSION_PATCH} CONFIG)
+    set_package_properties(KDevPlatform PROPERTIES
+        TYPE REQUIRED
+    )
+endif()
 add_subdirectory(plugins)
 
 add_subdirectory(pics)

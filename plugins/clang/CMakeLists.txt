@@ -17,6 +17,13 @@ if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT KDEVELOP_BUILD_IDE)
+    # this is to allow building with clang (on Linux) ?!
+    set(CMAKE_C_VISIBILITY_PRESET default)
+    set(CMAKE_CXX_VISIBILITY_PRESET default)
+    set(CMAKE_VISIBILITY_INLINES_HIDDEN 0)
+endif()
+
 # TODO: Move to kdevplatform
 function(add_private_library target)
     set(options)
