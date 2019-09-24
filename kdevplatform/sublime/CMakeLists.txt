@@ -27,6 +27,8 @@ set(sublime_LIB_SRCS
     idealtoolbutton.cpp
     idealdockwidget.cpp
     idealbuttonbarwidget.cpp
+
+    kwidgetstyleselector.cpp
 )
 declare_qt_logging_category(sublime_LIB_SRCS
     TYPE LIBRARY

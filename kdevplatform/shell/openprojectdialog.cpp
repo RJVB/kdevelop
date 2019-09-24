@@ -87,7 +87,13 @@ OpenProjectDialog::OpenProjectDialog(bool fetch, const QUrl& startUrl,
         delete helpButton;
     }
 
-    const bool useKdeFileDialog = qEnvironmentVariableIsSet("KDE_FULL_SESSION");
+#ifndef KDEV_USE_NATIVE_DIALOGS
+    // the user selected KDE file dialogs via the CMake option
+    const bool useKdeFileDialog = true;
+#else
+    // the user selected native file dialogs via the CMake option
+    const bool useKdeFileDialog = false;
+#endif
     QStringList filters, allEntry;
     QString filterFormat = useKdeFileDialog
                          ? QStringLiteral("%1|%2 (%1)")
