@@ -329,15 +329,22 @@ QAction* IdealController::actionForArea(Qt::DockWidgetArea area) const
 
 void IdealController::removeView(View* view, bool nondestructive)
 {
-    Q_ASSERT(m_view_to_action.contains(view));
-    QAction* action = m_view_to_action.value(view);
+    QAction* action = nullptr;
+    if (m_view_to_action.contains(view)) {
+        action = m_view_to_action.value(view);
+    }
+    if (!action) {
+        qCritical() << Q_FUNC_INFO << "View" << view << "has no known hide/shown action";
+        return;
+    }
 
     QWidget *viewParent = view->widget()->parentWidget();
     auto *dock = qobject_cast<IdealDockWidget *>(viewParent);
     if (!dock) { // tool views with a toolbar live in a QMainWindow which lives in a Dock
-        Q_ASSERT(qobject_cast<QMainWindow*>(viewParent));
-        viewParent = viewParent->parentWidget();
-        dock = qobject_cast<IdealDockWidget*>(viewParent);
+        if (qobject_cast<QMainWindow*>(viewParent)) {
+            viewParent = viewParent->parentWidget();
+            dock = qobject_cast<IdealDockWidget*>(viewParent);
+        }
     }
     Q_ASSERT(dock);
 
@@ -347,16 +354,18 @@ void IdealController::removeView(View* view, bool nondestructive)
        method asserts immediately.  */
     action->setChecked(false);
 
-    if (IdealButtonBarWidget* bar = barForDockArea(dock->dockWidgetArea()))
-        bar->removeAction(action);
+    if (dock) {
+        if (IdealButtonBarWidget* bar = barForDockArea(dock->dockWidgetArea()))
+            bar->removeAction(action);
 
+        m_dockwidget_to_action.remove(dock);
+
+        if (nondestructive)
+            view->widget()->setParent(nullptr);
+
+        delete dock;
+    }
     m_view_to_action.remove(view);
-    m_dockwidget_to_action.remove(dock);
-
-    if (nondestructive)
-        view->widget()->setParent(nullptr);
-
-    delete dock;
 }
 
 void IdealController::moveView(View *view, Qt::DockWidgetArea area)
