@@ -487,6 +487,7 @@ void VcsPluginHelper::annotationContextMenuAboutToShow( KTextEditor::View* view,
     connect(historyAction, &QAction::triggered, this, [this, rev]() {
         history(rev);
     });
+    menu->setTearOffEnabled(true);
 }
 
 void VcsPluginHelper::handleAnnotationBorderVisibilityChanged(View* view, bool visible)

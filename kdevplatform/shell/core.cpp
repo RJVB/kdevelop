@@ -130,6 +130,28 @@ bool CorePrivate::initialize(Core::Setup mode, const QString& session )
     m_mode=mode;
 
     qCDebug(SHELL) << "Creating controllers";
+#if defined(Q_OS_UNIX)
+    auto tmpLocation = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    const QString tmpName(QStringLiteral("/kdevelop-tmp-%1-").arg(getuid()));
+    const auto pos = tmpLocation.lastIndexOf(tmpName);
+    if (pos >= 0) {
+        // we must have been started by another KDevelop session,
+        // restore the default TempLocation
+        tmpLocation = tmpLocation.left(pos);
+    }
+    tmpLocation += tmpName + session;
+    m_tmpDir = new QDir(tmpLocation);
+    if (m_tmpDir->exists()) {
+        qCDebug(SHELL) << "Removing existing session temp dir" << tmpLocation;
+        m_tmpDir->removeRecursively();
+    }
+    m_tmpDir->mkpath(tmpLocation);
+    if (m_tmpDir->exists()) {
+        // make the directory exclusive to us. 
+        QFile::setPermissions(tmpLocation, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+        qputenv("TMPDIR", tmpLocation.toLatin1());
+    }
+#endif
 
     if( !sessionController )
     {
@@ -312,6 +334,11 @@ CorePrivate::~CorePrivate()
     delete workingSetController.data();
     delete testController.data();
     delete runtimeController.data();
+
+    if (m_tmpDir->exists()) {
+        m_tmpDir->removeRecursively();
+        delete m_tmpDir;
+    }
 
     selectionController.clear();
     projectController.clear();
