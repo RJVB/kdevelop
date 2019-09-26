@@ -48,11 +48,15 @@ class WorkingSetController;
 class TestController;
 class RuntimeController;
 
-class KDEVPLATFORMSHELL_EXPORT CorePrivate {
+class KDEVPLATFORMSHELL_EXPORT CorePrivate : public QObject {
+    Q_OBJECT
+
 public:
     explicit CorePrivate(Core *core);
     ~CorePrivate();
     bool initialize( Core::Setup mode, const QString& session );
+    void shutdownGracefully();
+
     QPointer<PluginController> pluginController;
     QPointer<UiController> uiController;
     QPointer<ProjectController> projectController;
