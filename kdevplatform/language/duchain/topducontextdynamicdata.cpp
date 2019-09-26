@@ -418,7 +418,7 @@ Item TopDUContextDynamicData::DUChainItemStorage<Item>::itemForIndex(uint index)
                    "Potentially, the context has been deleted without deleting its children.");
         item->rebuildDynamicData(parent, index);
     } else {
-        qCWarning(LANGUAGE) << "invalid item for index" << index << offsets.size() <<
+        qCDebug(LANGUAGE) << "invalid item for index" << index << offsets.size() <<
             offsets.value(realIndex).dataOffset;
     }
 
