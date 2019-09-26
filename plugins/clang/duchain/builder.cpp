@@ -1215,7 +1215,7 @@ CXChildVisitResult Visitor::buildParmDecl(CXCursor cursor)
 CXChildVisitResult Visitor::buildUse(CXCursor cursor)
 {
     m_uses[m_parentContext->context].push_back(cursor);
-    return cursor.kind == CXCursor_DeclRefExpr || cursor.kind == CXCursor_MemberRefExpr ?
+    return cursor.kind == CXCursor_DeclRefExpr || cursor.kind == CXCursor_MemberRefExpr || cursor.kind == CXCursor_ObjCMessageExpr ?
         CXChildVisit_Recurse : CXChildVisit_Continue;
 }
 
@@ -1234,9 +1234,9 @@ CXChildVisitResult Visitor::buildMacroExpansion(CXCursor cursor)
 template<CXCursorKind CK>
 CXChildVisitResult Visitor::buildCompoundStatement(CXCursor cursor)
 {
-    if (CK == CXCursor_LambdaExpr || m_parentContext->context->type() == DUContext::Function)
+    if (CK == CXCursor_LambdaExpr || CK == CXCursor_BlockExpr || m_parentContext->context->type() == DUContext::Function)
     {
-        auto context = createContext<CK, CK == CXCursor_LambdaExpr ? DUContext::Function : DUContext::Other>(cursor);
+        auto context = createContext<CK, CK == CXCursor_LambdaExpr || CK == CXCursor_BlockExpr ? DUContext::Function : DUContext::Other>(cursor);
         CurrentContext newParent(context, m_parentContext->keepAliveContexts);
         PushValue<CurrentContext*> pushCurrent(m_parentContext, &newParent);
         clang_visitChildren(cursor, &visitCursor, this);
@@ -1574,6 +1574,7 @@ CXChildVisitResult visitCursor(CXCursor cursor, CXCursor parent, CXClientData da
     case CXCursor_DeclRefExpr:
     case CXCursor_MemberRefExpr:
     case CXCursor_ObjCClassRef:
+    case CXCursor_ObjCMessageExpr:
         return visitor->buildUse(cursor);
     case CXCursor_MacroExpansion:
         return visitor->buildMacroExpansion(cursor);
@@ -1581,6 +1582,8 @@ CXChildVisitResult visitCursor(CXCursor cursor, CXCursor parent, CXClientData da
         return visitor->buildCompoundStatement<CXCursor_CompoundStmt>(cursor);
     case CXCursor_LambdaExpr:
         return visitor->buildCompoundStatement<CXCursor_LambdaExpr>(cursor);
+    case CXCursor_BlockExpr:
+        return visitor->buildCompoundStatement<CXCursor_BlockExpr>(cursor);
     case CXCursor_CXXBaseSpecifier:
         return visitor->buildCXXBaseSpecifier(cursor);
     case CXCursor_ParmDecl:

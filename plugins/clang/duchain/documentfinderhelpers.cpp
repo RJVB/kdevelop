@@ -183,7 +183,8 @@ QStringList mimeTypesList()
         QStringLiteral("text/x-csrc"),
         QStringLiteral("text/x-c++src"),
         QStringLiteral("text/vnd.nvidia.cuda.csrc"),
-        QStringLiteral("text/x-objcsrc")
+        QStringLiteral("text/x-objcsrc"),
+        QStringLiteral("text/x-objc++src")
     };
     return mimeTypes;
 }
