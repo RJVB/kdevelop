@@ -18,6 +18,7 @@
     Boston, MA 02110-1301, USA.
 */
 
+#include "config-kdevelop.h"
 #include "manpageplugin.h"
 
 #include "manpagedocumentation.h"
@@ -93,7 +94,8 @@ IDocumentation::Ptr ManPagePlugin::documentationForDeclaration( Declaration* dec
 
     // Don't show man-page documentation for files that are not in /usr/include, because then we
     // most probably will be confusing the global function-name with a local one
-    if (!dec->topContext()->url().str().startsWith(QLatin1String("/usr/")))
+    if (!dec->topContext()->url().str().startsWith(QLatin1String("/usr/"))
+            && !dec->topContext()->url().str().startsWith(QLatin1String(KDEVELOP_INSTALL_PREFIX)))
         return {};
 
     ///@todo Do more verification to make sure that we're showing the correct documentation for the declaration
