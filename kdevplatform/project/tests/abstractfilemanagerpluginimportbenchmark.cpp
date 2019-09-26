@@ -23,6 +23,7 @@
 
 #include <project/abstractfilemanagerplugin.h>
 #include <project/projectmodel.h>
+#include <project/projectwatcher.h>
 
 #include <shell/projectcontroller.h>
 
@@ -109,8 +110,14 @@ private Q_SLOTS:
     {
         Q_UNUSED(job);
         int elapsed = m_timer.elapsed();
+        // The number of items in the dirwatcher can be obtained as follows,
+        // provided dirs are added one by one and not with a recursive call
+        // to ProjectWatcher::addDir():
+        ProjectWatcher* watcher = qobject_cast<ProjectWatcher*>(m_manager->projectWatcher(m_project));
+        int watched = watcher ? watcher->size() : -1;
         m_out << "importing " << m_project->fileSet().size()
             << " items into project #" << m_projectNumber
+            << " with " << watched << " watched directories"
             << " took " << elapsed / 1000.0 << " seconds" << endl;
 
         s_numBenchmarksRunning -= 1;
@@ -165,6 +172,20 @@ int main(int argc, char** argv)
                                     << " seconds total\n";
                                 QCoreApplication::instance()->quit();
                              });
+            if (qEnvironmentVariableIsSet("BENCHMARK_ORIGINAL_DIRWATCHER")) {
+                // benchmark the creation and deletion of the original dirwatcher:
+                KDirWatch *watcher = new KDirWatch(benchmark->m_project);
+                qout << "Benchmarking KDirWatch for all of " << argv[i];
+                benchmark->m_timer.start();
+                watcher->addDir(benchmark->m_project->path().toLocalFile(), KDirWatch::WatchSubDirs | KDirWatch:: WatchFiles );
+                int elapsed = benchmark->m_timer.elapsed();
+                qout << "\tfeeding the watcher: " << elapsed / 1000.0 << " seconds\n";
+                benchmark->m_timer.restart();
+                delete watcher;
+                elapsed = benchmark->m_timer.elapsed();
+                qout << "\tdeleting the watcher: " << elapsed / 1000.0 << " seconds\n";
+                qout.flush();
+            }
         }
     }
 
