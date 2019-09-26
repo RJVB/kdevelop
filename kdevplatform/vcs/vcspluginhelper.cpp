@@ -197,7 +197,11 @@ void VcsPluginHelper::setupFromContext(Context* context)
 {
     Q_D(VcsPluginHelper);
 
-    d->ctxUrls = context->urls();
+    if (context) {
+        d->ctxUrls = context->urls();
+    } else {
+        qCCritical(VCS) << "context is NULL in" << Q_FUNC_INFO;
+    }
 }
 
 QList<QUrl> VcsPluginHelper::contextUrlList() const
