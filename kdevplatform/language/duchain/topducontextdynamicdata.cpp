@@ -180,7 +180,7 @@ void loadTopDUContextData(const uint topContextIndex, LoadType loadType, F callb
     store.read(( char* )&readValue, sizeof(uint));
     // now readValue is filled with the top-context data size
     Q_ASSERT(readValue >= sizeof(TopDUContextData));
-    const QByteArray data = file.store(loadType == FullLoad ? readValue : sizeof(TopDUContextData));
+    const QByteArray data = store.read(loadType == FullLoad ? readValue : sizeof(TopDUContextData));
     const auto* topData = reinterpret_cast<const TopDUContextData*>(data.constData());
     callback(topData);
 }
@@ -566,7 +566,7 @@ void TopDUContextDynamicData::loadData() const
     //Skip top-context data
     uint readValue;
     store->read(( char* )&readValue, sizeof(uint));
-    store->seek(readValue + file->pos());
+    store->seek(readValue + store->pos());
 
     m_contexts.loadData(store);
     m_declarations.loadData(store);
