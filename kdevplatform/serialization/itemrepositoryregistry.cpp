@@ -309,7 +309,7 @@ bool ItemRepositoryRegistryPrivate::open(const QString& path)
     for (auto it = m_repositories.constBegin(), end = m_repositories.constEnd(); it != end; ++it) {
         if (!it.key()->open(path)) {
             deleteDataDirectory(path);
-            qCritical() << "failed to open repository" << repository->repositoryName() << "at" << path;
+            qCritical() << "failed to open repository" << it.key()->repositoryName() << "at" << path;
             abort();
         }
     }
