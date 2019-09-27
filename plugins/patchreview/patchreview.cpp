@@ -500,10 +500,18 @@ void PatchReviewPlugin::setPatch( IPatchSource* patch ) {
 
     if( m_patch ) {
         disconnect( m_patch.data(), &IPatchSource::patchChanged, this, &PatchReviewPlugin::notifyPatchChanged );
-        if ( qobject_cast<LocalPatchSource*>( m_patch ) ) {
+        if ( qobject_cast<LocalPatchSource*>( m_patch )
+            || qobject_cast<VCSDiffPatchSource*>( m_patch ) ) {
             // make sure we don't leak this
             // TODO: what about other patch sources?
+            IDocument* patchDocument = ICore::self()->documentController()->documentForUrl( m_patch->file() );
+            if (patchDocument) {
+                // it certainly shouldn't hurt to close the diff document now instead of at some later point.
+                patchDocument->close(IDocument::Discard);
+            }
             m_patch->deleteLater();
+        } else {
+            qCWarning(PLUGIN_PATCHREVIEW) << "LEAKING" << m_patch << m_patch->name() << m_patch->file();
         }
     }
     m_patch = patch;
