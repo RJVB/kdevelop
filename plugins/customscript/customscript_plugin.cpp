@@ -258,12 +258,12 @@ KDevelop::SourceFormatterStyle CustomScriptPlugin::predefinedStyle(const QString
                                    "project. It supports a variety of formatting style options via "
                                    "a <b>.clang-format</b> configuration file, usually located in "
                                    "the project root directory."));
-    } else if (name == QLatin1String("kdev_format_source")) {
-        result.setCaption(QStringLiteral("KDevelop: kdev_format_source"));
-        result.setContent(QStringLiteral("kdev_format_source $FILE $TMPFILE"));
+    } else if (name == QLatin1String("kdev_format_source5")) {
+        result.setCaption(QStringLiteral("KDevelop: kdev_format_source5"));
+        result.setContent(QStringLiteral("kdev_format_source5 $FILE $TMPFILE"));
         result.setUsePreview(false);
         result.setDescription(i18n("Description:<br />"
-                                   "<b>kdev_format_source</b> is a script bundled with KDevelop "
+                                   "<b>kdev_format_source5</b> is a script bundled with KDevelop "
                                    "which allows using fine-grained formatting rules by placing "
                                    "meta-files called <b>format_sources</b> into the file-system.<br /><br />"
                                    "Each line of the <b>format_sources</b> files defines a list of wildcards "
@@ -296,7 +296,7 @@ KDevelop::SourceFormatterStyle CustomScriptPlugin::predefinedStyle(const QString
 QVector<KDevelop::SourceFormatterStyle> CustomScriptPlugin::predefinedStyles() const
 {
     const QVector<KDevelop::SourceFormatterStyle> styles = stylesFromLanguagePlugins() + QVector<KDevelop::SourceFormatterStyle>{
-        predefinedStyle(QStringLiteral("kdev_format_source")),
+        predefinedStyle(QStringLiteral("kdev_format_source5")),
         predefinedStyle(QStringLiteral("clang_format")),
         predefinedStyle(QStringLiteral("GNU_indent_GNU")),
         predefinedStyle(QStringLiteral("GNU_indent_KR")),
