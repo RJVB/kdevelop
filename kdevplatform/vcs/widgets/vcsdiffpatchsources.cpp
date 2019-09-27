@@ -20,6 +20,7 @@
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QSizePolicy>
 #include <QDir>
 #include <QFontDatabase>
 #include <QLabel>
@@ -44,6 +45,25 @@
 
 using namespace KDevelop;
 
+class VCSCommitMessageEditor : public KTextEdit {
+    Q_OBJECT
+public:
+    VCSCommitMessageEditor()
+        : m_minWidth(KTextEdit::minimumSizeHint().width())
+    {}
+    void setMinWidth(int w)
+    {
+        m_minWidth = w;
+        setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    }
+    QSize minimumSizeHint() const override
+    {
+        return QSize(m_minWidth, KTextEdit::minimumSizeHint().height());
+    }
+protected:
+    int m_minWidth;
+};
+
 VCSCommitDiffPatchSource::VCSCommitDiffPatchSource(VCSDiffUpdater* updater)
     : VCSDiffPatchSource(updater), m_vcs(updater->vcs())
 {
@@ -52,15 +72,23 @@ VCSCommitDiffPatchSource::VCSCommitDiffPatchSource(VCSDiffUpdater* updater)
     auto* layout = new QVBoxLayout(m_commitMessageWidget.data());
     layout->setMargin(0);
 
-    m_commitMessageEdit = new KTextEdit;
-    m_commitMessageEdit.data()->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
-    m_commitMessageEdit.data()->setLineWrapMode(QTextEdit::NoWrap);
-    m_vcs->setupCommitMessageEditor(updater->url(), m_commitMessageEdit.data());
+    VCSCommitMessageEditor *editor = new VCSCommitMessageEditor;
+    m_commitMessageEdit = editor;
+    editor->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    editor->setLineWrapMode(QTextEdit::NoWrap);
+    // set the message editor to be 72 characters wide.
+    // Given the widget margins that requires 74 actual characters.
+    editor->setMinWidth(editor->fontMetrics().width(QString(74, QLatin1Char('m'))));
+    m_vcs->setupCommitMessageEditor(updater->url(), editor);
+    editor->setCheckSpellingEnabled(false);
 
     auto* titleLayout = new QHBoxLayout;
-    titleLayout->addWidget(new QLabel(i18n("Commit Message:")));
+    auto *label = new QLabel(i18n("Commit Message:"));
+    // Copy the message editor tooltip to the label to increase its chances of being seen
+    label->setToolTip(editor->toolTip());
+    titleLayout->addWidget(label);
 
-    m_oldMessages = new KComboBox(m_commitMessageWidget.data());
+    m_oldMessages = new KComboBox(editor);
 
     m_oldMessages->addItem(i18n("Old Messages"));
     const auto oldMessages = this->oldMessages();
@@ -75,7 +103,7 @@ VCSCommitDiffPatchSource::VCSCommitDiffPatchSource(VCSDiffUpdater* updater)
     titleLayout->addWidget(m_oldMessages);
 
     layout->addLayout(titleLayout);
-    layout->addWidget(m_commitMessageEdit.data());
+    layout->addWidget(editor);
     connect(this, &VCSCommitDiffPatchSource::reviewCancelled, this, &VCSCommitDiffPatchSource::addMessageToHistory);
     connect(this, &VCSCommitDiffPatchSource::reviewFinished, this, &VCSCommitDiffPatchSource::addMessageToHistory);
 }
@@ -332,3 +360,4 @@ VCSStandardDiffUpdater::~VCSStandardDiffUpdater() {
 VCSDiffUpdater::~VCSDiffUpdater() {
 }
 
+#include "vcsdiffpatchsources.moc"
