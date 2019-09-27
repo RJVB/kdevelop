@@ -101,8 +101,10 @@ void QtHelpQtDoc::loadDocumentation()
         QString fileNamespace = QHelpEngineCore::namespaceName(fileName);
         if (!fileNamespace.isEmpty() && !m_engine.registeredDocumentations().contains(fileNamespace)) {
             qCDebug(QTHELP) << "loading doc" << fileName << fileNamespace;
-            if(!m_engine.registerDocumentation(fileName))
-                qCCritical(QTHELP) << "error >> " << fileName << m_engine.error();
+            if(!m_engine.registerDocumentation(fileName)) {
+                qCCritical(QTHELP) << "error registering QtHelp file" << fileName << m_engine.error();
+                return;
+            }
         }
     }
 }
@@ -113,7 +115,10 @@ void QtHelpQtDoc::unloadDocumentation()
     for (const QString& fileName : fileNames) {
         QString fileNamespace = QHelpEngineCore::namespaceName(fileName);
         if(!fileName.isEmpty() && m_engine.registeredDocumentations().contains(fileNamespace)) {
-            m_engine.unregisterDocumentation(fileName);
+            if (!m_engine.unregisterDocumentation(fileName)) {
+                qCCritical(QTHELP) << "error unregistering QtHelp file" << fileName << m_engine.error();
+                return;
+            }
         }
     }
 }
