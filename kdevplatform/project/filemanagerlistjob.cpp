@@ -176,15 +176,15 @@ void FileManagerListJob::addSubDir( ProjectFolderItem* item, bool forceRecursive
     m_listQueue.enqueue(item);
 }
 
-// this method was removed in 5.4 but do we really not need it in the "alt-dirwatching" implementation?
-// void FileManagerListJob::removeSubDir(ProjectFolderItem* item)
-// {
-//     if (m_aborted) {
-//         return;
-//     }
-// 
-//     m_listQueue.removeAll(item);
-// }
+// this method was removed in 5.4 but we need it in the "alt-dirwatching" implementation
+void FileManagerListJob::removeSubDir(ProjectFolderItem* item)
+{
+    if (m_aborted) {
+        return;
+    }
+
+    m_listQueue.removeAll(item);
+}
  
 void FileManagerListJob::handleRemovedItem(ProjectBaseItem* item)
 {

@@ -60,6 +60,7 @@ public:
     Path basePath() const;
 
     void addSubDir(ProjectFolderItem* item, bool forceRecursive = false);
+    void removeSubDir(ProjectFolderItem* item);
     void handleRemovedItem(ProjectBaseItem* item);
 
     void abort();
