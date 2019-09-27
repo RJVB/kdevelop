@@ -242,6 +242,7 @@ void VCSDiffPatchSource::updateFromDiff(const VcsDiff& vcsdiff)
 void VCSDiffPatchSource::update() {
     if(!m_updater)
         return;
+    m_updater->setContextLines(m_contextLines == 0? INT_MAX : m_contextLines);
     updateFromDiff(m_updater->update());
 }
 
@@ -336,6 +337,7 @@ bool showVcsDiff(IPatchSource* vcsDiff)
 
 VcsDiff VCSStandardDiffUpdater::update() const
 {
+    m_vcs->setDiffContextLines(m_contextLines);
     QScopedPointer<VcsJob> diffJob(m_vcs->diff(m_url,
                                    KDevelop::VcsRevision::createSpecialRevision(KDevelop::VcsRevision::Base),
                                    KDevelop::VcsRevision::createSpecialRevision(KDevelop::VcsRevision::Working)));

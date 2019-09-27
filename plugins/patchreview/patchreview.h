@@ -99,6 +99,7 @@ public Q_SLOTS :
     void highlightPatch();
     void updateKompareModel();
     void forceUpdate();
+    void forceUpdateWithContext(int contextLines);
     void areaChanged(Sublime::Area* area);
     void executeFileReviewAction();
 
