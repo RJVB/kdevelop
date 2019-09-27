@@ -533,7 +533,9 @@ AbstractFileManagerPlugin::AbstractFileManagerPlugin( const QString& componentNa
                     const auto index = model->index(i, 0, parent);
                     auto* item = index.data(ProjectModel::ProjectItemRole).value<ProjectBaseItem*>();
                     Q_ASSERT(item);
-                    for (auto* job : d->m_projectJobs.value(item->project())) {
+                    // the change "auto* job" -> "auto job" has nothing to do with other3-dirwatching patch
+                    // but rather with a build issue with clang 5(?!)
+                    for (auto job : d->m_projectJobs.value(item->project())) {
                         job->handleRemovedItem(item);
                     }
                 }
