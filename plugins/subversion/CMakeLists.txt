@@ -66,4 +66,10 @@ target_link_libraries(kdevsubversion
     kdevsvncpp
 )
 
+if(UNIX AND NOT APPLE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_link_libraries(kdevsubversion "-pthread")
+    endif()
+endif()
+
 install(PROGRAMS org.kde.kdevelop_svn.desktop DESTINATION ${KDE_INSTALL_APPDIR})
