@@ -41,7 +41,7 @@
 
 using namespace KDevelop;
 
-class HelpViewer : public QTextBrowser
+class KDevelop::HelpViewer : public QTextBrowser
 {
     Q_OBJECT
 public:
@@ -178,7 +178,7 @@ void StandardDocumentationView::search ( const QString& text, DocumentationFindW
     Q_D(StandardDocumentationView);
 
     using WebkitThing = QTextDocument;
-    WebkitThing::FindFlags ff = 0;
+    WebkitThing::FindFlags ff = nullptr;
     if(options & DocumentationFindWidget::Previous)
         ff |= WebkitThing::FindBackward;
 
