@@ -81,6 +81,7 @@ void QtHelpExternalAssistant::externalViewerExit(int exitCode, QProcess::ExitSta
             // TODO: shouldn't this be m_externalViewerProcess->deleteLater() ??
             m_externalViewerProcess->deleteLater();
             m_externalViewerProcess = nullptr;
+            return false;
         }
     } else {
         qCCritical(QTHELP) << "externalViewerExit called for the wrong QtHelpExternalAssistant instance (forwarding)";
