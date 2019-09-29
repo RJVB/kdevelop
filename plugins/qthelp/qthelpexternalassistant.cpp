@@ -173,6 +173,7 @@ bool QtHelpExternalAssistant::openUrl(const QUrl& url)
                 qCWarning(QTHELP) << "failure starting" << path << ":" << s_self->m_externalViewerProcess->errorString();
                 s_self->m_externalViewerProcess->deleteLater();
                 s_self->m_externalViewerProcess = nullptr;
+                return false;
             } else {
                 s_self->m_externalViewerProcess->setObjectName(path);
             }
