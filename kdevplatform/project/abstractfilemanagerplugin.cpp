@@ -116,6 +116,7 @@ public:
     // and directories to the dirwatcher. It takes longer to load but
     // works better for certain (large) projects that use in-tree builds.
     bool m_intreeDirWatching;
+    QVector<QString> m_queuedFolders;
 };
 
 void AbstractFileManagerPluginPrivate::projectClosing(IProject* project)
@@ -578,26 +579,45 @@ ProjectFolderItem *AbstractFileManagerPlugin::import( IProject *project )
         //       see also: https://bugs.kde.org/show_bug.cgi?id=404184
         connect(watcher, &KDirWatch::deleted,
                 this, [this] (const QString& path) {
-                    QTimer::singleShot(1000, this, [this, path]() {
-                        Q_D(AbstractFileManagerPlugin);
+                    Q_D(AbstractFileManagerPlugin);
+                    // queue the path so that any other change signals will be ignored
+                    d->m_queuedFolders.append(path);
+                    QTimer::singleShot(1000, this, [d, path]() {
+                        d->m_queuedFolders.removeAll(path);
                         d->deleted(path);
                     });
                 });
         if (d->m_intreeDirWatching) {
             connect(watcher, &KDirWatch::created,
                     this, [this] (const QString& path) {
-                        QTimer::singleShot(1000, this, [this, path]() {
-                            Q_D(AbstractFileManagerPlugin);
+                        Q_D(AbstractFileManagerPlugin);
+                        // check if we're a subfolder of a folder that is already queued for reloading
+                        for (const QString& folder : qAsConst(d->m_queuedFolders)) {
+                            if (path.startsWith(folder)) {
+                                return;
+                            }
+                        }
+                        d->m_queuedFolders.append(path);
+                        QTimer::singleShot(1000, this, [d, path]() {
                             d->dirty(path, true);
+                            d->m_queuedFolders.removeOne(path);
                         });
                     });
             watcher->addDir(project->path().toLocalFile(), KDirWatch::WatchSubDirs | KDirWatch:: WatchFiles );
         } else {
             connect(watcher, &KDirWatch::dirty,
                     this, [this] (const QString& path) {
-                        QTimer::singleShot(1000, this, [this, path]() {
-                            Q_D(AbstractFileManagerPlugin);
+                        Q_D(AbstractFileManagerPlugin);
+                        // check if we're a subfolder of a folder that is already queued for reloading
+                        for (const QString& folder : qAsConst(d->m_queuedFolders)) {
+                            if (path.startsWith(folder)) {
+                                return;
+                            }
+                        }
+                        d->m_queuedFolders.append(path);
+                        QTimer::singleShot(1000, this, [d, path]() {
                             d->dirty(path);
+                            d->m_queuedFolders.removeOne(path);
                         });
                     });
         }
