@@ -23,8 +23,6 @@
 #include <KIO/Job>
 #include <QQueue>
 
-#include <mutex>
-
 // uncomment to time import jobs
 // #define TIME_IMPORT_JOB
 
@@ -33,6 +31,8 @@
 #endif
 
 #include "path.h"
+
+class QSemaphore;
 
 namespace KDevelop
 {
@@ -107,7 +107,7 @@ private:
     KIO::UDSEntryList entryList;
     // kill does not delete the job instantaneously
     QAtomicInt m_aborted;
-    std::recursive_mutex m_listing;
+    QSemaphore* m_listing;
 
 #ifdef TIME_IMPORT_JOB
     QElapsedTimer m_timer;
