@@ -22,6 +22,7 @@
 
 #include <KIO/Job>
 #include <QQueue>
+#include <QSemaphore>
 
 // uncomment to time import jobs
 // #define TIME_IMPORT_JOB
@@ -32,13 +33,10 @@
 
 #include "path.h"
 
-class QSemaphore;
-
 namespace KDevelop
 {
 class ProjectFolderItem;
 class ProjectBaseItem;
-class RunControllerProxy;
 class IProject;
 
 class FileManagerListJob : public KIO::Job
@@ -64,6 +62,7 @@ public:
     void handleRemovedItem(ProjectBaseItem* item);
 
     void abort();
+    bool doKill() override;
     void start() override;
     void start(int msDelay);
     bool started() const { return m_started; }
@@ -107,7 +106,7 @@ private:
     KIO::UDSEntryList entryList;
     // kill does not delete the job instantaneously
     QAtomicInt m_aborted;
-    QSemaphore* m_listing;
+    QSemaphore m_listing;
 
 #ifdef TIME_IMPORT_JOB
     QElapsedTimer m_timer;
@@ -119,9 +118,6 @@ private:
     bool m_recursive;
     bool m_started;
     bool m_disposable;
-protected:
-    RunControllerProxy* m_rcProxy;
-    friend class RunControllerProxy;
 };
 
 }

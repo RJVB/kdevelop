@@ -31,7 +31,6 @@
 #include <QtConcurrentRun>
 #include <QDir>
 #include <QTimer>
-#include <QSemaphore>
 
 #include <interfaces/icore.h>
 #include <interfaces/iruncontroller.h>
@@ -51,74 +50,21 @@ bool isChildItem(ProjectBaseItem* parent, ProjectBaseItem* child)
 }
 }
 
-class KDevelop::RunControllerProxy : public KJob
+class SemaReleaser
 {
 public:
-    RunControllerProxy(FileManagerListJob* proxied)
-        : KJob()
-        , m_proxied(proxied)
-    {
-        setCapabilities(KJob::Killable);
-        setObjectName(proxied->objectName());
-        ICore::self()->runController()->registerJob(this);
-    }
-
-    ~RunControllerProxy()
-    {
-        if (m_proxied) {
-            m_proxied->m_rcProxy = nullptr;
-            done();
-        }
-    }
-
-    // we don't run anything ourselves
-    void start()
-    {}
-
-    bool doKill()
-    {
-        if (m_proxied) {
-            qCWarning(PROJECT) << "Aborting" << m_proxied;
-            auto proxied = m_proxied;
-            done();
-            proxied->abort();
-        }
-        return true;
-    }
-
-    void done()
-    {
-        if (m_proxied) {
-            ICore::self()->runController()->unregisterJob(this);
-            m_proxied = nullptr;
-        }
-    }
-
-    FileManagerListJob* m_proxied;
-};
-
-class QSemaLocker
-{
-public:
-    QSemaLocker(QSemaphore *sem, int n)
+    SemaReleaser(QSemaphore* sem)
         : m_sem(sem)
-        , m_resources(n)
     {
-        if (sem) {
-            sem->acquire(n);
-        }
     }
 
-    ~QSemaLocker()
+    ~SemaReleaser()
     {
-        if (m_sem) {
-            m_sem->release(m_resources);
-        }
+        m_sem->release();
     }
 
 private:
     QSemaphore* m_sem;
-    int m_resources;
 };
 
 FileManagerListJob::FileManagerListJob(ProjectFolderItem* item, bool recursive)
@@ -126,12 +72,11 @@ FileManagerListJob::FileManagerListJob(ProjectFolderItem* item, bool recursive)
     // cache *a copy* of the item info, without parent info so we own it completely
     , m_basePath(item->path())
     , m_aborted(false)
-    , m_listing(new QSemaphore(1))
+    , m_listing(1)
     , m_emitWatchDir(!qEnvironmentVariableIsSet("KDEV_PROJECT_INTREE_DIRWATCHING_MODE"))
     , m_recursive(true) // sic!
     , m_started(false)
     , m_disposable(false)
-    , m_rcProxy(nullptr)
 {
     qRegisterMetaType<KIO::UDSEntryList>("KIO::UDSEntryList");
     qRegisterMetaType<KIO::Job*>();
@@ -153,19 +98,14 @@ FileManagerListJob::FileManagerListJob(ProjectFolderItem* item, bool recursive)
 
 FileManagerListJob::~FileManagerListJob()
 {
-    // lock and abort to ensure our background list job is stopped
-    m_listing->acquire(1);
     m_aborted = true;
-    if (m_rcProxy) {
-        m_rcProxy->done();
-        m_rcProxy->deleteLater();
-    }
+    // lock and abort to ensure our background list job is stopped
+    m_listing.acquire();
+    Q_ASSERT(m_listing.available() == 0);
+    ICore::self()->runController()->unregisterJob(this);
     m_item = nullptr;
     m_project = nullptr;
-    m_rcProxy = nullptr;
     m_basePath = Path();
-    m_listing->release(1);
-    delete m_listing;
 }
 
 ProjectFolderItem* FileManagerListJob::item() const
@@ -246,9 +186,10 @@ void FileManagerListJob::startNextJob()
     m_project = m_item->project();
     if (m_item->path().isLocalFile()) {
         // optimized version for local projects using QDir directly
+        // start locking to ensure we don't get destroyed while waiting for the list to finish
+        m_listing.acquire();
         QtConcurrent::run([this] (const Path& path) {
-            // start locking to ensure we don't get destroyed while waiting for the list to finish
-            QSemaLocker lock(m_listing, 1);
+            SemaReleaser lock(&m_listing);
             if (m_aborted) {
                 return;
             }
@@ -333,9 +274,7 @@ void FileManagerListJob::handleResults(const KIO::UDSEntryList& entriesIn)
     if( m_listQueue.isEmpty() ) {
         m_basePath = Path();
         emitResult();
-        if (m_rcProxy) {
-            m_rcProxy->done();
-        }
+        ICore::self()->runController()->unregisterJob(this);
         m_item = nullptr;
         m_project = nullptr;
 
@@ -355,9 +294,7 @@ void FileManagerListJob::abort()
     m_aborted = true;
     m_listQueue.clear();
 
-    if (m_rcProxy) {
-        m_rcProxy->done();
-    }
+    ICore::self()->runController()->unregisterJob(this);
 
     m_item = nullptr;
     m_project = nullptr;
@@ -371,6 +308,11 @@ void FileManagerListJob::abort()
     }
     Q_ASSERT(killed);
     Q_UNUSED(killed);
+}
+
+bool FileManagerListJob::doKill()
+{
+    return false;
 }
 
 void FileManagerListJob::start(int msDelay)
@@ -390,11 +332,13 @@ void FileManagerListJob::start()
     if (m_aborted) {
         return;
     }
-    if (!m_rcProxy) {
-        m_rcProxy = new RunControllerProxy(this);
+    // set m_started immediately so we can safely register ourselves with the jobController
+    // which will call us again.
+    m_started = true;
+    if (!m_started) {
+        ICore::self()->runController()->registerJob(this);
     }
     startNextJob();
-    m_started = true;
 }
 
 void FileManagerListJob::setRecursive(bool enabled)
