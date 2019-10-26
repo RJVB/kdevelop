@@ -200,7 +200,7 @@ if (KDEVELOP_BUILD_IDE)
     add_subdirectory(kdevplatform)
 else()
     message(STATUS "Checking for installed KDevPlatform v${KDevelop_VERSION_MAJOR}.${KDevelop_VERSION_MINOR}.${KDevelop_VERSION_PATCH}")
-    find_package(KDevPlatform ${KDevelop_VERSION_MAJOR}.${KDevelop_VERSION_MINOR}.${KDevelop_VERSION_PATCH} CONFIG)
+    find_package(KDevPlatform ${KDevelop_VERSION_MAJOR}.${KDevelop_VERSION_MINOR} CONFIG)
     set_package_properties(KDevPlatform PROPERTIES
         TYPE REQUIRED
     )
