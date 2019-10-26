@@ -55,8 +55,7 @@ class SemaReleaser
 public:
     SemaReleaser(QSemaphore* sem)
         : m_sem(sem)
-    {
-    }
+    {}
 
     ~SemaReleaser()
     {

@@ -31,6 +31,7 @@
 #include <QElapsedTimer>
 #endif
 
+
 #include "path.h"
 
 namespace KDevelop
