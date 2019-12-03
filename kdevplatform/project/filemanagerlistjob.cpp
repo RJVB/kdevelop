@@ -97,8 +97,8 @@ FileManagerListJob::FileManagerListJob(ProjectFolderItem* item, bool recursive)
 
 FileManagerListJob::~FileManagerListJob()
 {
+    // abort and lock to ensure our background list job is stopped
     m_aborted = true;
-    // lock and abort to ensure our background list job is stopped
     m_listing.acquire();
     Q_ASSERT(m_listing.available() == 0);
     ICore::self()->runController()->unregisterJob(this);
@@ -118,7 +118,7 @@ IProject* FileManagerListJob::project() const
 }
 
 QQueue<ProjectFolderItem*> FileManagerListJob::itemQueue() const
-{
+ {
     return m_listQueue;
 }
 

@@ -310,7 +310,10 @@ public:
         void stopThread()
         {
             quit();
-            wait();
+            if (!wait(10000)) {
+                qCWarning(LANGUAGE) << Q_FUNC_INFO << "thread didn't quit cleanly, terminating";
+                terminate();
+            }
         }
 
 private:
@@ -325,6 +328,7 @@ private:
                     m_data->doMoreCleanup(SOFT_CLEANUP_STEPS, TryLock);
                 });
             timer.start(cleanupEverySeconds * 1000);
+            setTerminationEnabled(true);
             exec();
         }
         DUChainPrivate* m_data;

@@ -22,6 +22,7 @@
 
 #include <QApplication>
 #include <QSocketNotifier>
+#include <QTimer>
 
 #include <KLocalizedString>
 
@@ -548,13 +549,29 @@ void Core::cleanup()
         d->pluginController->cleanup();
 
         d->sessionController->cleanup();
+        qCWarning(SHELL) << "sessionController cleaned up";
 
         d->testController->cleanup();
 
         //Disable the functionality of the language controller
         d->languageController->cleanup();
+        qCWarning(SHELL) << "languageController cleaned up";
 
+        // let's give us 1 minute to clean up the DUChain stuff
+        bool duChainShuttingDown = true;
+        QTimer::singleShot(60000, [&] {
+            // when our time is up, raise the SIGHUP signal that causes us to exit "barely cleanly".
+            if (duChainShuttingDown) {
+                qCCritical(SHELL) << "DUChain didn't shut down in under a minute; calling it quits";
+            } else {
+                qCCritical(SHELL) << "Final shutdown taking longer than a minute; calling it quits";
+            }
+            d->m_cleanedUp = true;
+            std::raise(SIGHUP);
+        });
         DUChain::self()->shutdown();
+        duChainShuttingDown = false;
+        qCWarning(SHELL) << "DUChain shut down";
     }
 
     d->m_cleanedUp = true;
