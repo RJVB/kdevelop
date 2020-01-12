@@ -136,7 +136,7 @@ KAboutData createAboutData()
                           i18n("KDevelop Platform"), QStringLiteral(KDEVPLATFORM_VERSION_STRING),
                           i18n("Development Platform for IDE-like Applications"),
                           KAboutLicense::LGPL_V2,
-                          i18n("Copyright 2004-%1, The KDevelop developers", QStringLiteral("2019")),
+                          i18n("Copyright 2004-%1, The KDevelop developers", QStringLiteral("2020")),
                           QString(), QStringLiteral("https://www.kdevelop.org/"));
 
     aboutData.addAuthor( i18n("Andreas Pakulat"), i18n( "Architecture, VCS Support, Project Management Support, QMake Projectmanager" ), QStringLiteral("apaku@gmx.de") );
@@ -546,6 +546,25 @@ void Core::cleanup()
 
         // before unloading language plugins, we need to make sure all parse jobs are done
         d->languageController->backgroundParser()->waitForIdle();
+
+        // let's give us 1 minute to clean up the DUChain stuff
+        bool duChainShuttingDown = true;
+        QTimer::singleShot(60000, [&] {
+            // when our time is up, raise the SIGHUP signal that causes us to exit "barely cleanly".
+            if (duChainShuttingDown) {
+                qCCritical(SHELL) << "DUChain didn't shut down in under a minute; calling it quits";
+                std::raise(SIGHUP);
+            } else {
+                qCCritical(SHELL) << "Final shutdown taking longer than a minute";
+            }
+            d->m_cleanedUp = true;
+        });
+        DUChain::self()->shutdown();
+        duChainShuttingDown = false;
+        qCWarning(SHELL) << "DUChain shut down";
+
+        // Only unload plugins after the DUChain shutdown to prevent issues with non-loaded factories for types
+        // See: https://bugs.kde.org/show_bug.cgi?id=379669
         d->pluginController->cleanup();
 
         d->sessionController->cleanup();
@@ -556,22 +575,6 @@ void Core::cleanup()
         //Disable the functionality of the language controller
         d->languageController->cleanup();
         qCWarning(SHELL) << "languageController cleaned up";
-
-        // let's give us 1 minute to clean up the DUChain stuff
-        bool duChainShuttingDown = true;
-        QTimer::singleShot(60000, [&] {
-            // when our time is up, raise the SIGHUP signal that causes us to exit "barely cleanly".
-            if (duChainShuttingDown) {
-                qCCritical(SHELL) << "DUChain didn't shut down in under a minute; calling it quits";
-            } else {
-                qCCritical(SHELL) << "Final shutdown taking longer than a minute; calling it quits";
-            }
-            d->m_cleanedUp = true;
-            std::raise(SIGHUP);
-        });
-        DUChain::self()->shutdown();
-        duChainShuttingDown = false;
-        qCWarning(SHELL) << "DUChain shut down";
     }
 
     d->m_cleanedUp = true;

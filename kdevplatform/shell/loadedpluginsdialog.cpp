@@ -28,7 +28,12 @@
 #include <QVBoxLayout>
 
 #include <KAboutData>
+#include <kcmutils_version.h>
+#if KCMUTILS_VERSION >= QT_VERSION_CHECK(5,65,0)
+#include <KAboutPluginDialog>
+#else
 #include <KAboutApplicationDialog>
+#endif
 #include <KIconLoader>
 #include <KLocalizedString>
 #include <KTitleWidget>
@@ -95,8 +100,13 @@ public:
             return displayName(plugin);
         case DescriptionRole:
             return pluginInfo(plugin).description();
-        case Qt::DecorationRole:
-            return pluginInfo(plugin).iconName();
+        case Qt::DecorationRole: {
+                const QString iconName = pluginInfo(plugin).iconName();
+                if (iconName.isEmpty()) {
+                    return QStringLiteral("kdevelop");
+                }
+                return iconName;
+            }
         default:
             return QVariant();
         };
@@ -241,12 +251,21 @@ private Q_SLOTS:
         auto *m = static_cast<PluginsModel*>(itemView()->model());
         KDevelop::IPlugin *p = m->pluginForIndex(focusedIndex());
         if (p) {
+#if KCMUTILS_VERSION >= QT_VERSION_CHECK(5,65,0)
+            const KPluginMetaData pluginInfo = ::pluginInfo(p);
+            if (!pluginInfo.name().isEmpty()) { // Be sure the about data is not completely empty
+                KDevelop::ScopedDialog<KAboutPluginDialog> aboutPlugin(pluginInfo, itemView());
+                aboutPlugin->exec();
+                return;
+            }
+#else
             KAboutData aboutData = KAboutData::fromPluginMetaData(pluginInfo(p));
             if (!aboutData.componentName().isEmpty()) { // Be sure the about data is not completely empty
                 KDevelop::ScopedDialog<KAboutApplicationDialog> aboutPlugin(aboutData, itemView());
                 aboutPlugin->exec();
                 return;
             }
+#endif
         }
     }
 private:

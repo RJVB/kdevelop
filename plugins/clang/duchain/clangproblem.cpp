@@ -25,6 +25,7 @@
 
 #include "util/clangtypes.h"
 #include "util/clangdebug.h"
+#include "util/clangutils.h"
 
 #include <language/duchain/duchainlock.h>
 #include <language/codegen/documentchangeset.h>
@@ -68,7 +69,7 @@ inline QString prettyDiagnosticSpelling(const QString& str)
     return ret;
 }
 
-ClangFixits fixitsForDiagnostic(CXDiagnostic diagnostic)
+ClangFixits fixitsForDiagnostic(CXDiagnostic diagnostic, CXTranslationUnit unit)
 {
     ClangFixits fixits;
     auto numFixits = clang_getDiagnosticNumFixIts(diagnostic);
@@ -76,12 +77,8 @@ ClangFixits fixitsForDiagnostic(CXDiagnostic diagnostic)
     for (uint i = 0; i < numFixits; ++i) {
         CXSourceRange range;
         const QString replacementText = ClangString(clang_getDiagnosticFixIt(diagnostic, i, &range)).toString();
-
-        const auto docRange = ClangRange(range).toDocumentRange();
-        auto doc = KDevelop::ICore::self()->documentController()->documentForUrl(docRange.document.toUrl());
-        const QString original = doc ? doc->text(docRange) : QString{};
-
-        fixits << ClangFixit{replacementText, docRange, QString(), original};
+        QByteArray original = ClangUtils::getRawContents(unit, range);
+        fixits << ClangFixit{replacementText, ClangRange(range).toDocumentRange(), QString(), QString::fromLocal8Bit(original)};
     }
     return fixits;
 }
@@ -170,7 +167,7 @@ ClangProblem::ClangProblem(CXDiagnostic diagnostic, CXTranslationUnit unit)
         }
     }
 
-    setFixits(fixitsForDiagnostic(diagnostic));
+    setFixits(fixitsForDiagnostic(diagnostic, unit));
     setFinalLocation(docRange);
     setSource(IProblem::SemanticAnalysis);
 
