@@ -548,16 +548,19 @@ void Core::cleanup()
         d->languageController->backgroundParser()->waitForIdle();
 
         // let's give us 1 minute to clean up the DUChain stuff
-        bool duChainShuttingDown = true;
+        static bool duChainShuttingDown = true;
+        static bool coreShuttingDown = true;
         QTimer::singleShot(60000, [&] {
-            // when our time is up, raise the SIGHUP signal that causes us to exit "barely cleanly".
-            if (duChainShuttingDown) {
-                qCCritical(SHELL) << "DUChain didn't shut down in under a minute; calling it quits";
-                std::raise(SIGHUP);
-            } else {
-                qCCritical(SHELL) << "Final shutdown taking longer than a minute";
+            if (coreShuttingDown) {
+                // when our time is up, raise the SIGHUP signal that causes us to exit "barely cleanly".
+                if (duChainShuttingDown) {
+                    qCCritical(SHELL) << "DUChain didn't shut down in under a minute; calling it quits";
+                    std::raise(SIGHUP);
+                } else {
+                    qCCritical(SHELL) << "Final shutdown taking longer than a minute";
+                }
+                d->m_cleanedUp = true;
             }
-            d->m_cleanedUp = true;
         });
         DUChain::self()->shutdown();
         duChainShuttingDown = false;
@@ -575,6 +578,7 @@ void Core::cleanup()
         //Disable the functionality of the language controller
         d->languageController->cleanup();
         qCWarning(SHELL) << "languageController cleaned up";
+        coreShuttingDown = false;
     }
 
     d->m_cleanedUp = true;
