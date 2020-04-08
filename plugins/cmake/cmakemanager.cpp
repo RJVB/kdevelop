@@ -130,7 +130,7 @@ Path CMakeManager::buildDirectory(KDevelop::ProjectBaseItem *item) const
 //     if(fi)
 //         ret.addPath(fi->buildDir());
 //     return ret;
-    return Path(CMake::currentBuildDir(item->project()));
+    return Path(CMake::currentCanonicalBuildDir(item->project()));
 }
 
 KDevelop::ProjectFolderItem* CMakeManager::import( KDevelop::IProject *project )
