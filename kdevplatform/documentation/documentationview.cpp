@@ -28,6 +28,7 @@
 #include <QAbstractItemView>
 #include <QLineEdit>
 #include <QShortcut>
+#include <QEvent>
 
 #include <KLocalizedString>
 #include <KMessageBox>
@@ -39,6 +40,8 @@
 #include <interfaces/iplugincontroller.h>
 #include "documentationfindwidget.h"
 #include "debug.h"
+
+#include <sublime/idealdockwidget.h>
 
 using namespace KDevelop;
 
@@ -81,7 +84,29 @@ DocumentationView::DocumentationView(QWidget* parent, ProvidersModel* model)
     setFocusProxy(mIdentifiers);
 
     QMetaObject::invokeMethod(this, "initialize", Qt::QueuedConnection);
+
+    floatStandaloneWindows();
 }
+
+bool DocumentationView::event(QEvent* e)
+{
+    if (e->type() == QEvent::ParentChange) {
+        // we'll have to make the new IdealDockWidget parent
+        // behave the way we'd like it to behave.
+        floatStandaloneWindows();
+    }
+    return QWidget::event(e);
+}
+
+void DocumentationView::floatStandaloneWindows()
+{
+    Sublime::IdealDockWidget* dockWidget = dynamic_cast<Sublime::IdealDockWidget*>(parent());
+    if (dockWidget) {
+        dockWidget->setFloating(false);
+        dockWidget->setFloatsAsStandalone(true);
+    }
+}
+
 
 QList<QAction*> DocumentationView::contextMenuActions() const
 {
