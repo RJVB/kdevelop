@@ -1,5 +1,10 @@
 add_definitions(-DTRANSLATION_DOMAIN=\"kdevqthelp\")
 
+if(KDEVELOP_USE_QTEXTBROWSER)
+    message(STATUS "QtHelp plugin will be built for rendering using QTextBrowser")
+    add_definitions(-DUSE_QTEXTBROWSER)
+endif()
+
 declare_qt_logging_category(kdevqthelp_LOG_SRCS
     TYPE PLUGIN
     IDENTIFIER QTHELP
