@@ -21,6 +21,8 @@
 #include "core_p.h"
 
 #include <QApplication>
+#include <QSocketNotifier>
+#include <QTimer>
 
 #include <KLocalizedString>
 
@@ -51,13 +53,36 @@
 #include <csignal>
 
 namespace {
-void shutdownGracefully(int sig)
-{
-    static volatile std::sig_atomic_t handlingSignal = 0;
+static KDevelop::CorePrivate *corePrivateInstance = nullptr;
+static int signalPipeRead = -1;
+static int signalPipeWrite = -1;
+static QSocketNotifier* signalNotifier = nullptr;
 
-    if ( !handlingSignal ) {
-        handlingSignal = 1;
-        qCDebug(SHELL) << "signal " << sig << " received, shutting down gracefully";
+void shutdownGracefully()
+{
+    // we can use std::atomic<bool> here even if it is not lock_free
+    // because we are not running as a signal handler in the strict
+    // sense of the term.
+    static std::atomic<bool> handlingSignal(false);
+
+    // Get the signal number that was written to the pipe in the actual
+    // signal handler. A bit awkward but we have to flush the read side
+    // of the pipe anyway.
+    // Failure to flush can lead to repetitive signals from QSocketNotifier
+    // as if it reacts to the presence of unread data rather than atomic
+    // writes to the pipe (observed on Linux 4.14 with Qt 5.9.6).
+    int sig;
+    read(signalPipeRead, &sig, sizeof(sig));
+
+    // exit as quickly as possible when a SIGHUP is received.
+    if (!handlingSignal.exchange(true)
+#ifdef SIGHUP
+       && sig != SIGHUP
+#endif
+    ) {
+        // the first time we see a signal we attempt to exit
+        // as if the user initiated the procedure via the GUI.
+        qCWarning(SHELL) << "Going down on signal" << sig;
         QCoreApplication* app = QCoreApplication::instance();
         if (auto* guiApp = qobject_cast<QApplication*>(app)) {
             guiApp->closeAllWindows();
@@ -65,23 +90,39 @@ void shutdownGracefully(int sig)
         app->quit();
         return;
     }
+    qCWarning(SHELL) << "Going down harder on signal" << sig;
+
+    // we come here if a 2nd signal was received before the full exit
+    // procedure completed, for instance because it blocked.
+    std::signal(sig, SIG_DFL);
+
+    if (corePrivateInstance->m_core) {
+       // shutdown core functionality, in particular the DUChain subsystem
+       // in an effort to prevent cache corruption. It's only cache, but
+       // regenerating it can be very time-consuming.
+       corePrivateInstance->m_core->shutdown();
+    }
+
+    signalNotifier->setEnabled(false);
 
     // re-raise signal with default handler and trigger program termination
-    std::signal(sig, SIG_DFL);
     std::raise(sig);
+}
+
+void signalHandler(int sig)
+{
+    if (signalPipeWrite == -1 || write(signalPipeWrite, &sig, sizeof(sig)) == -1) {
+        std::signal(sig, SIG_DFL);
+        std::raise(sig);
+    }
 }
 
 void installSignalHandler()
 {
-#ifdef SIGHUP
-    std::signal(SIGHUP, shutdownGracefully);
-#endif
-#ifdef SIGINT
-    std::signal(SIGINT, shutdownGracefully);
-#endif
-#ifdef SIGTERM
-    std::signal(SIGTERM, shutdownGracefully);
-#endif
+   std::signal(SIGHUP, signalHandler);
+   std::signal(SIGINT, signalHandler);
+   std::signal(SIGTERM, signalHandler);
+   signalNotifier->setEnabled(true);
 }
 }
 
@@ -90,7 +131,8 @@ namespace KDevelop {
 Core *Core::m_self = nullptr;
 
 CorePrivate::CorePrivate(Core *core)
-    : m_core(core)
+    : QObject(nullptr)
+    , m_core(core)
     , m_cleanedUp(false)
     , m_shuttingDown(false)
 {
@@ -282,7 +324,27 @@ bool CorePrivate::initialize(Core::Setup mode, const QString& session )
     testController->initialize();
     runtimeController->initialize();
 
-    installSignalHandler();
+//     A "proper" exit-on-signal approach:
+//     Open a pipe or an eventfd, then install your signal handler. In that signal
+//     handler, write anything to the writing end or write uint64_t(1) the eventfd.
+//     Create a QSocketNotifier on the reading end of the pipe or on the eventfd,
+//     connect its activation signal to a slot that does what you want.
+
+#ifdef Q_OS_UNIX
+    if (!corePrivateInstance) {
+        int pp[2];
+        if (pipe(pp)) {
+            qCWarning(SHELL) << "Error opening signal handler pipe" << strerror(errno);
+        } else {
+            signalPipeRead = pp[0];
+            signalPipeWrite = pp[1];
+            signalNotifier = new QSocketNotifier(signalPipeRead, QSocketNotifier::Read, this);
+            connect(signalNotifier, &QSocketNotifier::activated, this, &CorePrivate::shutdownGracefully, Qt::DirectConnection);
+            installSignalHandler();
+        }
+        corePrivateInstance = this;
+    }
+#endif
 
     qCDebug(SHELL) << "Done initializing controllers";
 
@@ -326,7 +388,21 @@ CorePrivate::~CorePrivate()
     workingSetController.clear();
     testController.clear();
     runtimeController.clear();
+
+    if (signalPipeWrite != -1) {
+        close(signalPipeWrite);
+        signalPipeWrite = -1;
+    }
+    if (signalPipeRead != -1) {
+        close(signalPipeRead);
+    }
 }
+
+void CorePrivate::shutdownGracefully()
+{
+   ::shutdownGracefully();
+}
+
 
 bool Core::initialize(Setup mode, const QString& session)
 {
@@ -347,9 +423,25 @@ Core *KDevelop::Core::self()
     return m_self;
 }
 
+#include <sys/resource.h>
+#ifdef Q_OS_LINUX
+#include <linux/fs.h>
+#define OPEN_MAX INR_OPEN_MAX
+#elif defined(Q_OS_MACOS)
+#include <sys/syslimits.h>
+#endif
+
 Core::Core(QObject *parent)
     : ICore(parent)
 {
+#ifdef OPEN_MAX
+    // set the maximum number of files
+    struct rlimit rlim;
+    getrlimit(RLIMIT_NOFILE, &rlim);
+    rlim.rlim_cur = qMin(rlim_t(OPEN_MAX), rlim.rlim_max);
+    setrlimit(RLIMIT_NOFILE, &rlim);
+#endif
+
     d = new CorePrivate(this);
 
     connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this, &Core::shutdown);
@@ -425,18 +517,38 @@ void Core::cleanup()
         // before unloading language plugins, we need to make sure all parse jobs are done
         d->languageController->backgroundParser()->waitForIdle();
 
+        // let's give us 1 minute to clean up the DUChain stuff
+        static bool duChainShuttingDown = true;
+        static bool coreShuttingDown = true;
+        QTimer::singleShot(60000, [&] {
+            if (coreShuttingDown) {
+                // when our time is up, raise the SIGHUP signal that causes us to exit "barely cleanly".
+                if (duChainShuttingDown) {
+                    qCCritical(SHELL) << "DUChain didn't shut down in under a minute; calling it quits";
+                    std::raise(SIGHUP);
+                } else {
+                    qCCritical(SHELL) << "Final shutdown taking longer than a minute";
+                }
+                d->m_cleanedUp = true;
+            }
+        });
         DUChain::self()->shutdown();
+        duChainShuttingDown = false;
+        qCInfo(SHELL) << "DUChain shut down";
 
         // Only unload plugins after the DUChain shutdown to prevent issues with non-loaded factories for types
         // See: https://bugs.kde.org/show_bug.cgi?id=379669
         d->pluginController->cleanup();
 
         d->sessionController->cleanup();
+        qCInfo(SHELL) << "sessionController cleaned up";
 
         d->testController->cleanup();
 
         //Disable the functionality of the language controller
         d->languageController->cleanup();
+        qCInfo(SHELL) << "languageController cleaned up";
+        coreShuttingDown = false;
     }
 
     d->m_cleanedUp = true;
