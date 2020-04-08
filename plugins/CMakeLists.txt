@@ -12,7 +12,9 @@ endif()
 # BEGIN: Debuggers
 add_subdirectory(debuggercommon)
 add_subdirectory(lldb)
-add_subdirectory(gdb)
+if(NOT APPLE)
+    add_subdirectory(gdb)
+endif()
 # END: Debuggers
 
 # BEGIN: Documentation
