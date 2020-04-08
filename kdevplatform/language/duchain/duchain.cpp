@@ -1820,6 +1820,20 @@ void DUChain::refCountDown(TopDUContext* top)
     }
 }
 
+// https://bugs.kde.org/show_bug.cgi?id=379004
+void DUChain::releaseReference(ReferencedTopDUContext* top) {
+  {
+      QMutexLocker l(&sdDUChainPrivate->m_referenceCountsMutex);
+      auto it = sdDUChainPrivate->m_referenceCounts.find(top->data());
+      if (it == sdDUChainPrivate->m_referenceCounts.end()) {
+        return;
+      }
+      sdDUChainPrivate->m_referenceCounts.erase(it);
+  }
+  const ReferencedTopDUContext ref = *top;
+  sdDUChainPrivate->m_openDocumentContexts.remove(ref);
+}
+
 void DUChain::emitDeclarationSelected(const DeclarationPointer& decl)
 {
     if (sdDUChainPrivate->m_destroyed)

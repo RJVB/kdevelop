@@ -295,6 +295,7 @@ private Q_SLOTS:
     void documentClosed(KDevelop::IDocument*);
 
 private:
+    void releaseReference(ReferencedTopDUContext* top);
     TopDUContext* loadChain(uint index);
     //These two are exported here so that the extremely frequently called chainForIndex(..) can be inlined
     static bool m_deleted;
