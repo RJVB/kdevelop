@@ -29,6 +29,7 @@
 
 #include "config-kdevelop.h"
 #include "kdevelop_version.h"
+#include "kdevelop_fullversion.h"
 
 #include "urlinfo.h"
 
@@ -389,7 +390,7 @@ int main( int argc, char *argv[] )
     KDevelopApplication app(argc, argv);
     KLocalizedString::setApplicationDomain("kdevelop");
 
-    KAboutData aboutData( QStringLiteral("kdevelop"), i18n("KDevelop"), QStringLiteral(KDEVELOP_VERSION_STRING),
+    KAboutData aboutData( QStringLiteral("kdevelop"), i18n("KDevelop"), QStringLiteral(KDEVELOP_FULL_VERSION_STRING),
                           i18n("The KDevelop Integrated Development Environment"),
                           KAboutLicense::GPL,
                           i18n("Copyright 1999-%1, The KDevelop developers", QStringLiteral("2020")),

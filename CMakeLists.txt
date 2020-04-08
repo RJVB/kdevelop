@@ -40,6 +40,8 @@ if(POLICY CMP0071)
   cmake_policy(SET CMP0071 OLD)
 endif()
 
+include(GetGitRevisionDescription)
+
 set(QT_MIN_VERSION "5.7.0")
 find_package(Qt5 ${QT_MIN_VERSION} CONFIG REQUIRED Widgets Concurrent Quick QuickWidgets)
 if(BUILD_TESTING)
@@ -158,6 +160,28 @@ endif()
 # create config-kdevelop.h
 configure_file(config-kdevelop.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config-kdevelop.h)
 include_directories(${KDevelop_BINARY_DIR}) # for config-kdevelop.h
+
+# create kdevelop_fullversion.h
+set(KDevelop_FULL_VERSION "${KDevelop_VERSION_MAJOR}.${KDevelop_VERSION_MINOR}.${KDevelop_VERSION_PATCH}")
+git_describe(GIT_FULL_VERSION "--tags")
+if(GIT_FULL_VERSION)
+    # development build, i.e. from a git working copy.
+    # Get the current commit version using `git describe` and
+    # strip the leading v plus the part that matches the version
+    # declared in the project definition above.
+    string(REPLACE "v${KDevelop_FULL_VERSION}" "" COMMIT_VERSION "${GIT_FULL_VERSION}")
+    if(NOT ${COMMIT_VERSION} MATCHES ${GIT_FULL_VERSION})
+        # `git describe` agrees with KDevelop_VERSION_STRING;
+        # make an atomic version string by appending the additional info
+        string(APPEND KDevelop_FULL_VERSION ${COMMIT_VERSION})
+    else()
+        # `git describe` provides a seemingly unrelated version string;
+        # append it in parentheses.
+        string(APPEND KDevelop_FULL_VERSION " (${GIT_FULL_VERSION})")
+    endif()
+    message(STATUS "Setting KDevelop version to: ${KDevelop_FULL_VERSION}")
+endif()
+configure_file(kdevelop_fullversion.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/kdevelop_fullversion.h)
 
 add_subdirectory(kdevplatform)
 add_subdirectory(plugins)
