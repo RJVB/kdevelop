@@ -416,7 +416,12 @@ void PatchReviewPlugin::switchToEmptyReviewArea()
 QUrl PatchReviewPlugin::urlForFileModel( const Diff2::DiffModel* model )
 {
     KDevelop::Path path(QDir::cleanPath(m_patch->baseDir().toLocalFile()));
-    QVector<QString> destPath = KDevelop::Path(QLatin1Char('/') + model->destinationPath()).segments();
+    QVector<QString> destPath;
+    if (model->destinationPath().startsWith(QLatin1Char('/'))) {
+        destPath = KDevelop::Path(model->destinationPath()).segments();
+    } else {
+        destPath = KDevelop::Path(QLatin1Char('/') + model->destinationPath()).segments();
+    }
     if (destPath.size() >= (int)m_depth) {
         destPath.remove(0, m_depth);
     }

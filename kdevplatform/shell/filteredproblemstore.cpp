@@ -27,6 +27,8 @@
 
 #include <KLocalizedString>
 
+#include <QDebug>
+
 using namespace KDevelop;
 
 namespace
@@ -36,10 +38,14 @@ namespace
 void addDiagnostics(ProblemStoreNode *node, const QVector<IProblem::Ptr> &diagnostics)
 {
     for (const IProblem::Ptr& ptr : diagnostics) {
-        auto *child = new ProblemNode(node, ptr);
-        node->addChild(child);
+        if (ptr.data()){
+            auto *child = new ProblemNode(node, ptr);
+            node->addChild(child);
 
-        addDiagnostics(child, ptr->diagnostics());
+            addDiagnostics(child, ptr->diagnostics());
+        } else {
+            qWarning() << Q_FUNC_INFO << "caught NULL ptr in" << diagnostics;
+        }
     }
 }
 
