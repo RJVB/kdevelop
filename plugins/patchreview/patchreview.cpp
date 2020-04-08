@@ -609,6 +609,9 @@ KDevelop::ContextMenuExtension PatchReviewPlugin::contextMenuExtension(KDevelop:
         urls << econtext->url();
     }
 
+#ifndef Q_OS_MACOS
+    // don't on Mac for now, using the git/show_diffs or git/commit actions after using this 
+    // cause a crash.
     if (urls.size() == 1) {
         auto* reviewAction = new QAction(QIcon::fromTheme(QStringLiteral("text-x-patch")),
                                          i18n("Review Patch"), parent);
@@ -618,6 +621,7 @@ KDevelop::ContextMenuExtension PatchReviewPlugin::contextMenuExtension(KDevelop:
         cm.addAction( KDevelop::ContextMenuExtension::VcsGroup, reviewAction );
         return cm;
     }
+#endif
 
     return KDevelop::IPlugin::contextMenuExtension(context, parent);
 }
