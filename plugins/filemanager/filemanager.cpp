@@ -115,6 +115,7 @@ void FileManager::fillContextMenu(const KFileItem& item, QMenu* menu)
     KDevelop::ContextMenuExtension::populateMenu(tmpMenu, extensions);
     contextActions.append(tmpMenu->actions());
     delete tmpMenu;
+    menu->setTearOffEnabled(true);
 }
 
 void FileManager::openFile(const KFileItem& file)
