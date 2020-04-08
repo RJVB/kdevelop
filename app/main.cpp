@@ -507,6 +507,11 @@ int main( int argc, char *argv[] )
 
     KDevelopApplication app(argc, argv);
     KLocalizedString::setApplicationDomain("kdevelop");
+#ifdef Q_OS_MACOS
+    if (!QGuiApplication::platformName().contains(QLatin1String("cocoa"))) {
+        QCoreApplication::setAttribute(Qt::AA_DontUseNativeMenuBar);
+    }
+#endif
 
     KAboutData aboutData( QStringLiteral("kdevelop"), i18n("KDevelop"), QStringLiteral(KDEVELOP_FULL_VERSION_STRING),
                           i18n("The KDevelop Integrated Development Environment"),
