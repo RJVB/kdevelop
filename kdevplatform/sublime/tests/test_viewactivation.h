@@ -36,6 +36,7 @@ private Q_SLOTS:
     void cleanup();
 
     void viewActivation();
+    void idealDockWidgets();
     void activationInMultipleMainWindows();
     void activationAfterViewRemoval();
     void activationAfterRemovalSimplestCase();
@@ -50,6 +51,7 @@ private:
     Sublime::Document *doc2;
     Sublime::Document *doc3;
     Sublime::Document *doc4;
+    Sublime::Document *doc5;
     Sublime::Document *tool1;
     Sublime::Document *tool2;
     Sublime::Document *tool3;
@@ -59,6 +61,7 @@ private:
     Sublime::View *view221;
     Sublime::View *view231;
     Sublime::View *view241;
+    Sublime::View *view251;
     Sublime::View *viewT11;
     Sublime::View *viewT21;
     Sublime::View *viewT31;
