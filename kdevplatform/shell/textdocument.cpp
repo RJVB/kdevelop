@@ -86,11 +86,8 @@ public:
 
     ~TextDocumentPrivate()
     {
-        // Handle the case we are being deleted while the context menu is not yet hidden.
-        // We want to remove all actions we added to it, especially those not owned by the document
-        // but by the plugins (i.e. created on-the-fly during ContextMenuExtension::populateMenu
-        // with ownership set to our addedContextMenu)
-        cleanContextMenu();
+        delete addedContextMenu;
+        addedContextMenu = nullptr;
 
         saveSessionConfig();
         delete document;
@@ -227,31 +224,6 @@ public:
         setStatus(document, dirty);
     }
 
-    void cleanContextMenu()
-    {
-        if (!addedContextMenu) {
-            return;
-        }
-
-        if (currentContextMenu) {
-            const auto actions = addedContextMenu->actions();
-            for (QAction* action : actions) {
-                currentContextMenu->removeAction(action);
-            }
-            currentContextMenu.clear();
-        }
-
-        // The addedContextMenu owns those actions created on-the-fly for the context menu
-        // (other than those actions only shared for the context menu, but also used elsewhere)
-        // and thuse deletes then on its own destruction.
-        // Some actions potentially could be connected to triggered-signal handlers
-        // using Qt::QueuedConnection (at least SwitchToBuddyPlugin does so currently).
-        // Deleting them here also would also delete the connection before the handler is triggered.
-        // So we delay the menu's and thus their destruction to the next eventloop by default.
-        addedContextMenu->deleteLater();
-        addedContextMenu = nullptr;
-    }
-
     TextDocument * const q;
 
     QPointer<KTextEditor::Document> document;
@@ -260,7 +232,6 @@ public:
     bool loaded = false;
     // we want to remove the added stuff when the menu hides
     QMenu* addedContextMenu = nullptr;
-    QPointer<QMenu> currentContextMenu;
 };
 
 class TextViewPrivate
@@ -752,28 +723,16 @@ void KDevelop::TextDocument::textChanged(KTextEditor::Document *document)
     notifyContentChanged();
 }
 
-void KDevelop::TextDocument::unpopulateContextMenu()
-{
-    Q_D(TextDocument);
-
-    auto* menu = qobject_cast<QMenu*>(sender());
-
-    disconnect(menu, &QMenu::aboutToHide, this, &TextDocument::unpopulateContextMenu);
-
-    d->cleanContextMenu();
-}
-
 void KDevelop::TextDocument::populateContextMenu( KTextEditor::View* v, QMenu* menu )
 {
     Q_D(TextDocument);
 
     if (d->addedContextMenu) {
-        qCWarning(SHELL) << "populateContextMenu() called while we still handled another menu.";
-        d->cleanContextMenu();
+        foreach ( QAction* action, d->addedContextMenu->actions() ) {
+            menu->removeAction(action);
+        }
+        delete d->addedContextMenu;
     }
-
-    d->currentContextMenu = menu;
-    connect(menu, &QMenu::aboutToHide, this, &TextDocument::unpopulateContextMenu);
 
     d->addedContextMenu = new QMenu();
 
