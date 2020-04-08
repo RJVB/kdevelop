@@ -11,6 +11,16 @@ remove_definitions(
     -DQT_NO_CAST_FROM_ASCII
 )
 
+include(FindPkgConfig)
+# find LMDB and lmdbxx
+find_path(LMDBXX_INCLUDE_DIRS NAMES "lmdb++.h" HINTS "$ENV{LMDB_DIR}/include")
+find_path(LMDB_INCLUDE_DIRS NAMES "lmdb.h" HINTS "$ENV{LMDB_DIR}/include")
+find_library(LMDB_LIBRARIES NAMES lmdb HINTS $ENV{LMDB_DIR}/lib)
+find_package_handle_standard_args(LMDB DEFAULT_MSG LMDB_INCLUDE_DIRS LMDB_LIBRARIES)
+find_package_handle_standard_args(LMDBXX DEFAULT_MSG LMDBXX_INCLUDE_DIRS)
+pkg_check_modules(PKG_LZ4 liblz4 REQUIRED)
+find_package_handle_standard_args(LZ4 DEFAULT_MSG PKG_LZ4_INCLUDEDIR PKG_LZ4_LIBRARIES)
+
 if(BUILD_TESTING)
     add_subdirectory(highlighting/tests)
     add_subdirectory(duchain/tests)
@@ -53,6 +63,7 @@ set(KDevPlatformLanguage_LIB_SRCS
     duchain/localindexeddeclaration.cpp
     duchain/topducontext.cpp
     duchain/topducontextdynamicdata.cpp
+    duchain/topducontextdynamicdata_p.cpp
     duchain/topducontextutils.cpp
     duchain/functiondefinition.cpp
     duchain/declaration.cpp
@@ -182,6 +193,8 @@ ki18n_wrap_ui(KDevPlatformLanguage_LIB_SRCS
 
 kdevplatform_add_library(KDevPlatformLanguage SOURCES ${KDevPlatformLanguage_LIB_SRCS})
 target_include_directories(KDevPlatformLanguage PRIVATE ${Boost_INCLUDE_DIRS})
+target_include_directories(KDevPlatformLanguage PRIVATE ${LMDB_INCLUDE_DIRS} ${LMDBXX_INCLUDE_DIRS} ${PKG_LZ4_INCLUDEDIR})
+kde_source_files_enable_exceptions(duchain/topducontextdynamicdata_p.cpp)
 target_link_libraries(KDevPlatformLanguage
 PUBLIC
     KDev::Serialization
@@ -198,6 +211,7 @@ PRIVATE
     KF5::IconThemes
     Grantlee5::Templates
 )
+target_link_libraries(KDevPlatformLanguage LINK_PRIVATE ${LMDB_LIBRARIES} ${PKG_LZ4_LIBRARIES})
 
 install(FILES
     assistant/renameaction.h

@@ -225,6 +225,17 @@ void PatchReviewPlugin::forceUpdate() {
     }
 }
 
+void PatchReviewPlugin::forceUpdateWithContext(int contextLines) {
+    if( m_patch ) {
+        // register the requested number of lines of context
+        // and regenerate the patch.
+        m_patch->setContextLines(contextLines);
+        forceUpdate();
+    } else {
+        qWarning() << Q_FUNC_INFO << "called while m_patch==" << m_patch;
+     }
+}
+ 
 void PatchReviewPlugin::updateKompareModel() {
     if ( !m_patch ) {
         ///TODO: this method should be cleaned up, it can be called by the timer and
