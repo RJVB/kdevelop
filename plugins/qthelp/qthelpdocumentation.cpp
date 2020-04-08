@@ -44,6 +44,7 @@
 #include <documentation/standarddocumentationview.h>
 #include "qthelpnetwork.h"
 #include "qthelpproviderabstract.h"
+#include "qthelpexternalassistant.h"
 
 using namespace KDevelop;
 
@@ -440,6 +441,14 @@ void QtHelpDocumentation::jumpedTo(const QUrl& newUrl)
 IDocumentationProvider* QtHelpDocumentation::provider() const
 {
     return m_provider;
+}
+
+bool QtHelpDocumentation::viewInExternalBrowser()
+{
+    if (QtHelpExternalAssistant::self()->useExternalViewer()) {
+        return QtHelpExternalAssistant::openUrl(m_current.value());
+    }
+    return false;
 }
 
 QtHelpAlternativeLink::QtHelpAlternativeLink(const QString& name, const QtHelpDocumentation* doc, QObject* parent)

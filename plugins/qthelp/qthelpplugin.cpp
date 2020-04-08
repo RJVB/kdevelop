@@ -24,6 +24,7 @@
 #include <interfaces/idocumentationcontroller.h>
 #include "qthelpprovider.h"
 #include "qthelpqtdoc.h"
+#include "qthelpexternalassistant.h"
 #include "qthelp_config_shared.h"
 #include "debug.h"
 #include "qthelpconfig.h"
@@ -41,6 +42,7 @@ QtHelpPlugin::QtHelpPlugin(QObject* parent, const QVariantList& args)
     , m_qtHelpProviders()
     , m_qtDoc(new QtHelpQtDoc(this, QVariantList()))
     , m_loadSystemQtDoc(false)
+    , m_useExternalViewer(false)
 {
     Q_UNUSED(args);
     s_plugin = this;
@@ -57,21 +59,30 @@ void QtHelpPlugin::readConfig()
 {
     QStringList iconList, nameList, pathList, ghnsList;
     QString searchDir;
-    qtHelpReadConfig(iconList, nameList, pathList, ghnsList, searchDir, m_loadSystemQtDoc);
+    ExternalViewerSettings extViewer;
+    qtHelpReadConfig(iconList, nameList, pathList, ghnsList, searchDir, m_loadSystemQtDoc, extViewer);
 
     searchHelpDirectory(pathList, nameList, iconList, searchDir);
     loadQtHelpProvider(pathList, nameList, iconList);
     loadQtDocumentation(m_loadSystemQtDoc);
+    m_useExternalViewer = extViewer.useExtViewer;
+    m_externalViewerExecutable = extViewer.extViewerExecutable;
+    if (m_useExternalViewer) {
+        KDevelop::QtHelpExternalAssistant::self()->setUseExternalViewer(m_useExternalViewer);
+        KDevelop::QtHelpExternalAssistant::self()->setExternalViewerExecutable(m_externalViewerExecutable);
+    }
 
     emit changedProvidersList();
 }
 
 void QtHelpPlugin::loadQtDocumentation(bool loadQtDoc)
 {
-    if(!loadQtDoc){
-        m_qtDoc->unloadDocumentation();
-    } else if(loadQtDoc) {
-        m_qtDoc->loadDocumentation();
+    if (!qEnvironmentVariableIsSet("KDEV_NO_QT_DOCUMENTATION")) {
+        if(!loadQtDoc ){
+            m_qtDoc->unloadDocumentation();
+        } else if(loadQtDoc) {
+            m_qtDoc->loadDocumentation();
+        }
     }
 }
 
@@ -99,6 +110,9 @@ void QtHelpPlugin::loadQtHelpProvider(const QStringList& pathList, const QString
 {
     QList<QtHelpProvider*> oldList(m_qtHelpProviders);
     m_qtHelpProviders.clear();
+    if (qEnvironmentVariableIsSet("KDEV_NO_QT_DOCUMENTATION")) {
+        return;
+    }
     for(int i=0; i < pathList.length(); i++) {
         // check if provider already exist
         QString fileName = pathList.at(i);
@@ -120,6 +134,11 @@ void QtHelpPlugin::loadQtHelpProvider(const QStringList& pathList, const QString
                 provider->setName(name);
                 provider->setIconName(iconName);
             }
+            const QString error = provider->engine()->error();
+            if (!error.isEmpty() && !error.endsWith(QStringLiteral("already exists."))) {
+                qCCritical(QTHELP) << "QtHelp provider error for" << fileName << error;
+                goto bail;
+            }
 
             bool exist = false;
             for (QtHelpProvider* existingProvider : qAsConst(m_qtHelpProviders)) {
@@ -134,7 +153,7 @@ void QtHelpPlugin::loadQtHelpProvider(const QStringList& pathList, const QString
             }
         }
     }
-
+bail:;
     // delete unused providers
     qDeleteAll(oldList);
 }
@@ -142,12 +161,14 @@ void QtHelpPlugin::loadQtHelpProvider(const QStringList& pathList, const QString
 QList<KDevelop::IDocumentationProvider*> QtHelpPlugin::providers()
 {
     QList<KDevelop::IDocumentationProvider*> list;
-    list.reserve(m_qtHelpProviders.size() + (m_loadSystemQtDoc?1:0));
-    for (QtHelpProvider* provider : qAsConst(m_qtHelpProviders)) {
-        list.append(provider);
-    }
-    if(m_loadSystemQtDoc){
-        list.append(m_qtDoc);
+    if (!qEnvironmentVariableIsSet("KDEV_NO_QT_DOCUMENTATION")) {
+        list.reserve(m_qtHelpProviders.size() + (m_loadSystemQtDoc?1:0));
+        for (QtHelpProvider* provider : qAsConst(m_qtHelpProviders)) {
+            list.append(provider);
+        }
+        if(m_loadSystemQtDoc){
+            list.append(m_qtDoc);
+        }
     }
     return list;
 }
@@ -160,6 +181,11 @@ QList<QtHelpProvider*> QtHelpPlugin::qtHelpProviderLoaded()
 bool QtHelpPlugin::isQtHelpQtDocLoaded() const
 {
     return m_loadSystemQtDoc;
+}
+
+bool QtHelpPlugin::useExternalViewer() const
+{
+    return m_useExternalViewer;
 }
 
 bool QtHelpPlugin::isQtHelpAvailable() const
