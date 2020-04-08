@@ -130,7 +130,7 @@ void ProjectModelItemDelegate::paint(QPainter* painter, const QStyleOptionViewIt
 void ProjectModelItemDelegate::drawBranchName(QPainter* painter, const QStyleOptionViewItem& option,
                                               const QRect& rect, const QString& branchName) const
 {
-    QString text = option.fontMetrics.elidedText(branchName, Qt::ElideRight, rect.width());
+    QString text = option.fontMetrics.elidedText(branchName, Qt::ElideNone, rect.width());
 
     bool selected = option.state & QStyle::State_Selected;
     QPalette::ColorGroup colorGroup = selected ? QPalette::Active : QPalette::Disabled;
@@ -173,7 +173,7 @@ void ProjectModelItemDelegate::drawDisplay(QPainter* painter, const QStyleOption
     }
 
     QFontMetrics fm(painter->fontMetrics());
-    painter->drawText(rect, fm.elidedText(text, Qt::ElideRight, rect.width()));
+    painter->drawText(rect, fm.elidedText(text, Qt::ElideNone, rect.width()));
 }
 
 bool ProjectModelItemDelegate::helpEvent(QHelpEvent* event,
