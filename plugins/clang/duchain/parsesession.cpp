@@ -91,10 +91,6 @@ void sanitizeArguments(QVector<QByteArray>& arguments)
 QVector<QByteArray> argsForSession(const QString& path, ParseSessionData::Options options, const ParserSettings& parserSettings)
 {
     QMimeDatabase db;
-    if (db.mimeTypeForFile(path).name() == QLatin1String("text/x-objcsrc")) {
-        return {QByteArrayLiteral("-xobjective-c++")};
-    }
-
     // TODO: No proper mime type detection possible yet
     // cf. https://bugs.freedesktop.org/show_bug.cgi?id=26913
     if (path.endsWith(QLatin1String(".cl"), Qt::CaseInsensitive)) {
@@ -110,19 +106,12 @@ QVector<QByteArray> argsForSession(const QString& path, ParseSessionData::Option
         return result;
     }
 
+    auto result = parserSettings.toClangAPI();
     if (parserSettings.parserOptions.isEmpty()) {
         // The parserOptions can be empty for some unit tests that use ParseSession directly
-        auto defaultArguments = ClangSettingsManager::self()->parserSettings(path).toClangAPI();
-
-        defaultArguments.append(QByteArrayLiteral("-nostdinc"));
-        defaultArguments.append(QByteArrayLiteral("-nostdinc++"));
-        defaultArguments.append(QByteArrayLiteral("-xc++"));
-
-        sanitizeArguments(defaultArguments);
-        return defaultArguments;
+        result = ClangSettingsManager::self()->parserSettings(path).toClangAPI();
     }
 
-    auto result = parserSettings.toClangAPI();
     result.append(QByteArrayLiteral("-nostdinc"));
     if (parserSettings.isCpp()) {
         result.append(QByteArrayLiteral("-nostdinc++"));
@@ -135,7 +124,18 @@ QVector<QByteArray> argsForSession(const QString& path, ParseSessionData::Option
         return result;
     }
 
-    result.append(parserSettings.isCpp() ? QByteArrayLiteral("-xc++") : QByteArrayLiteral("-xc"));
+    // check the C family membership and set the appropriate mode
+    // overriding any inappropriate modes set earlier in the args list.
+    const auto mimeType = db.mimeTypeForFile(path).name();
+    if (mimeType == QStringLiteral("text/x-objc++src")) {
+        result.append(QByteArrayLiteral("-xobjective-c++"));
+    } else if (mimeType == QStringLiteral("text/x-objcsrc")) {
+        result.append(QByteArrayLiteral(" -ObjC"));
+    } else if (parserSettings.isCpp()) {
+       result.append(QByteArrayLiteral("-xc++"));
+    } else {
+       result.append(QByteArrayLiteral("-xc"));
+    }
 
     sanitizeArguments(result);
     return result;

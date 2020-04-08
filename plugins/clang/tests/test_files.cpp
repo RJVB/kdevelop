@@ -90,6 +90,7 @@ void TestFiles::testFiles_data()
     if (isCudaAvailable()) {
         patterns.append("*.cu");
     }
+    patterns.append({"*.m", "*.mm"});
     const QStringList files = QDir(testDirPath).entryList(patterns, QDir::Files);
     for (const QString& file : files) {
         QTest::newRow(file.toUtf8().constData()) << QString(testDirPath + '/' + file);

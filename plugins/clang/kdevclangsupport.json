@@ -61,7 +61,8 @@
         "C++",
         "OpenCL C",
         "CUDA C",
-        "Objective-C"
+        "Objective-C",
+        "Objective-C++"
     ],
     "X-KDevelop-LoadMode": "AlwaysOn",
     "X-KDevelop-Mode": "NoGUI",
@@ -70,9 +71,10 @@
         "text/x-c++hdr",
         "text/x-csrc",
         "text/x-c++src",
+        "text/x-objcsrc",
+        "text/x-objc++src",
         "text/x-opencl-src",
         "text/vnd.nvidia.cuda.csrc",
-        "text/vnd.nvidia.cuda.chdr",
-        "text/x-objcsrc"
+        "text/vnd.nvidia.cuda.chdr"
     ]
 }
