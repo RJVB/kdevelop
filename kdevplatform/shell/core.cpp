@@ -22,7 +22,7 @@
 
 #include <QApplication>
 #include <QSocketNotifier>
-#include <QTimer>
+#include <signal.h>
 
 #include <KLocalizedString>
 
@@ -484,6 +484,12 @@ bool Core::shuttingDown() const
     return d->m_shuttingDown;
 }
 
+void handleALRM(int sig)
+{
+    fprintf(stderr, "Final shutdown taking longer than a minute: bailing\n");
+    std::raise(SIGHUP);
+}
+
 void Core::cleanup()
 {
     qCDebug(SHELL);
@@ -517,23 +523,7 @@ void Core::cleanup()
         // before unloading language plugins, we need to make sure all parse jobs are done
         d->languageController->backgroundParser()->waitForIdle();
 
-        // let's give us 1 minute to clean up the DUChain stuff
-        static bool duChainShuttingDown = true;
-        static bool coreShuttingDown = true;
-        QTimer::singleShot(60000, [&] {
-            if (coreShuttingDown) {
-                // when our time is up, raise the SIGHUP signal that causes us to exit "barely cleanly".
-                if (duChainShuttingDown) {
-                    qCCritical(SHELL) << "DUChain didn't shut down in under a minute; calling it quits";
-                    std::raise(SIGHUP);
-                } else {
-                    qCCritical(SHELL) << "Final shutdown taking longer than a minute";
-                }
-                d->m_cleanedUp = true;
-            }
-        });
         DUChain::self()->shutdown();
-        duChainShuttingDown = false;
         qCInfo(SHELL) << "DUChain shut down";
 
         // Only unload plugins after the DUChain shutdown to prevent issues with non-loaded factories for types
@@ -548,7 +538,13 @@ void Core::cleanup()
         //Disable the functionality of the language controller
         d->languageController->cleanup();
         qCInfo(SHELL) << "languageController cleaned up";
-        coreShuttingDown = false;
+
+        // let's give us 1 minute to exit completely
+        static struct itimerval rtt;
+        rtt.it_value.tv_sec= (unsigned long) 60, rtt.it_value.tv_usec= (unsigned long) 0;
+        rtt.it_interval.tv_sec= 0, rtt.it_interval.tv_usec= 0;
+        signal(SIGALRM, handleALRM);
+        setitimer( ITIMER_REAL, &rtt, nullptr );
     }
 
     d->m_cleanedUp = true;
