@@ -40,12 +40,12 @@ using namespace KDevelop;
 namespace {
 bool isChildItem(ProjectBaseItem* parent, ProjectBaseItem* child)
 {
-    do {
+    while(child) {
         if (child == parent) {
             return true;
         }
         child = child->parent();
-    } while(child);
+    }
     return false;
 }
 }
