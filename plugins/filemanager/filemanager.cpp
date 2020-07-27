@@ -88,6 +88,11 @@ FileManager::FileManager(KDevFileManagerPlugin *plugin, QWidget* parent)
     // Connect the bookmark handler
     connect(m_bookmarkHandler, &BookmarkHandler::openUrl, this, &FileManager::gotoUrl);
     connect(m_bookmarkHandler, &BookmarkHandler::openUrl, this, &FileManager::updateNav);
+    connect(KDevelop::ICore::self(), &KDevelop::ICore::aboutToShutdown, [this](){
+        qCWarning(PLUGIN_FILEMANAGER) << "Shutting down: closing" << this;
+        dirop->close();
+        dirop->dirLister()->setMainWindow(nullptr);
+    } );
 }
 
 FileManager::~FileManager()
