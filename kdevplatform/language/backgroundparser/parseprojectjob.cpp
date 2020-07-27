@@ -150,7 +150,7 @@ void ParseProjectJob::start()
         const auto path = IndexedString(currentDocument->url());
         auto fileIt = d->filesToParse.find(path);
         if (fileIt != d->filesToParse.end()) {
-            ICore::self()->languageController()->backgroundParser()->addDocument(path,
+            ICore::self()->languageController()->backgroundParser()->addControlledDocument(path, this,
                                                                                  TopDUContext::AllDeclarationsContextsAndUses, BackgroundParser::BestPriority,
                                                                                  this);
             d->filesToParse.erase(fileIt);
@@ -163,7 +163,7 @@ void ParseProjectJob::start()
         const auto path = IndexedString(document->url());
         auto fileIt = d->filesToParse.find(path);
         if (fileIt != d->filesToParse.end()) {
-            ICore::self()->languageController()->backgroundParser()->addDocument(path,
+            ICore::self()->languageController()->backgroundParser()->addControlledDocument(path, this,
                                                                                  TopDUContext::AllDeclarationsContextsAndUses, 10,
                                                                                  this);
             d->filesToParse.erase(fileIt);
@@ -181,7 +181,7 @@ void ParseProjectJob::start()
     // guard against reentrancy issues, see also bug 345480
     auto crashGuard = QPointer<ParseProjectJob> {this};
     for (const IndexedString& url : qAsConst(d->filesToParse)) {
-        ICore::self()->languageController()->backgroundParser()->addDocument(url, processingLevel,
+        ICore::self()->languageController()->backgroundParser()->addControlledDocument(url, this, processingLevel,
                                                                              BackgroundParser::InitialParsePriority,
                                                                              this);
         ++processed;
