@@ -27,11 +27,10 @@ fi
 if [ -z "$KDEV_PG_QT_VERSION" ]; then
     KDEV_PG_QT_VERSION=v2.2.1
 fi
-# remove kxmlgui_fixdockvisibilitystatestoring.patch for >5.66.0
-# remove ktexteditor_fixdragncopy.patch for >5.66.0
-KF5_VERSION=v5.66.0
-PLASMA_VERSION=v5.17.5
-KDE_RELEASESERVICE_VERSION=v19.12.1
+# remove breezeicons-compatcmake3.6.patch for >5.69.0
+KF5_VERSION=v5.69.0
+PLASMA_VERSION=v5.18.5
+KDE_RELEASESERVICE_VERSION=v20.04.1
 GRANTLEE_VERSION=v5.2.0
 OKTETA_VERSION=v0.26.3
 
@@ -88,10 +87,13 @@ if [ -z "$SKIP_PRUNE" ]; then
 fi
 
 # start building the deps
+# usage: build_project <repourl> <repodirectory> <branch/tag>
 function build_project
 { (
-    PROJECT=$1
-    VERSION=$2
+    REPOURL=$1
+    PROJECT=$2
+    VERSION=$3
+    shift
     shift
     shift
 
@@ -108,11 +110,7 @@ function build_project
         git fetch --tags
         cd ..
     else
-        if [ -z "$CUSTOM_GIT_URL" ]; then
-            git clone git://anongit.kde.org/$PROJECT
-        else
-            git clone $CUSTOM_GIT_URL
-        fi
+        git clone $REPOURL $PROJECT
     fi
 
     cd $PROJECT
@@ -145,11 +143,19 @@ function build_project
     ninja install
 ) }
 
+function build_kde_project
+{ (
+    REPOPATH=$1
+    PROJECT=${1#*/}
+    shift
+    build_project https://invent.kde.org/$REPOPATH.git $PROJECT $@
+) }
+
 function build_framework
 { (
     PROJECT=$1
     shift
-    build_project $PROJECT $KF5_VERSION $@
+    build_kde_project frameworks/$PROJECT $KF5_VERSION $@
 ) }
 
 # KDE Frameworks
@@ -176,7 +182,7 @@ build_framework kconfigwidgets -DBUILD_DESIGNERPLUGIN=OFF
 build_framework kiconthemes -DBUILD_DESIGNERPLUGIN=OFF
 build_framework ktextwidgets -DBUILD_DESIGNERPLUGIN=OFF
 build_framework kglobalaccel
-(PATCH_FILE=$SCRIPT_DIR/kxmlgui_fixdockvisibilitystatestoring.patch build_framework kxmlgui -DBUILD_DESIGNERPLUGIN=OFF)
+build_framework kxmlgui -DBUILD_DESIGNERPLUGIN=OFF
 build_framework kbookmarks
 build_framework solid
 build_framework kio -DBUILD_DESIGNERPLUGIN=OFF
@@ -186,40 +192,40 @@ build_framework threadweaver
 build_framework attica
 build_framework knewstuff
 build_framework syntax-highlighting
-(PATCH_FILE=$SCRIPT_DIR/ktexteditor_fixdragncopy.patch build_framework ktexteditor)
+build_framework ktexteditor
 build_framework kpackage
 build_framework kdeclarative
 build_framework kcmutils
 (PATCH_FILE=$SCRIPT_DIR/knotifications_no_phonon.patch build_framework knotifications)
-build_framework knotifyconfig
+(PATCH_FILE=$SCRIPT_DIR/knotifyconfig_no_phonon.patch build_framework knotifyconfig)
 build_framework kdoctools
-build_framework breeze-icons -DBINARY_ICONS_RESOURCE=1
+(PATCH_FILE=$SCRIPT_DIR/breezeicons-compatcmake3.6.patch build_framework breeze-icons -DBINARY_ICONS_RESOURCE=1)
 build_framework kpty
 build_framework kinit 
 fi
 
 # KDE Plasma
-build_project libksysguard $PLASMA_VERSION
-build_project kdecoration $PLASMA_VERSION # needed by breeze
-build_project breeze $PLASMA_VERSION
+build_kde_project plasma/libksysguard $PLASMA_VERSION
+build_kde_project plasma/kdecoration $PLASMA_VERSION # needed by breeze
+(PATCH_FILE=$SCRIPT_DIR/breeze-noconstexpr.patch build_kde_project plasma/breeze $PLASMA_VERSION)
 
 # KDE Applications
-build_project libkomparediff2 $KDE_RELEASESERVICE_VERSION
-build_project kate $KDE_RELEASESERVICE_VERSION -DDISABLE_ALL_OPTIONAL_SUBDIRECTORIES=TRUE -DBUILD_addons=TRUE -DBUILD_snippets=TRUE -DBUILD_kate-ctags=TRUE
-build_project konsole $KDE_RELEASESERVICE_VERSION
-build_project okteta $OKTETA_VERSION -DBUILD_DESIGNERPLUGIN=OFF -DBUILD_OKTETAKASTENLIBS=OFF
+build_kde_project sdk/libkomparediff2 $KDE_RELEASESERVICE_VERSION
+build_kde_project utilities/kate $KDE_RELEASESERVICE_VERSION -DDISABLE_ALL_OPTIONAL_SUBDIRECTORIES=TRUE -DBUILD_addons=TRUE -DBUILD_snippets=TRUE -DBUILD_kate-ctags=TRUE
+build_kde_project utilities/konsole $KDE_RELEASESERVICE_VERSION
+build_kde_project utilities/okteta $OKTETA_VERSION -DBUILD_DESIGNERPLUGIN=OFF -DBUILD_OKTETAKASTENLIBS=OFF
 
 # Extra
-(CUSTOM_GIT_URL=https://github.com/steveire/grantlee.git build_project grantlee $GRANTLEE_VERSION -DBUILD_TESTS=OFF)
+build_project https://github.com/steveire/grantlee.git  grantlee $GRANTLEE_VERSION -DBUILD_TESTS=OFF
 
 # KDevelop
-build_project kdevelop-pg-qt $KDEV_PG_QT_VERSION
-build_project kdevelop $KDEVELOP_VERSION
-build_project kdev-php $KDEVELOP_VERSION
+build_kde_project kdevelop/kdevelop-pg-qt $KDEV_PG_QT_VERSION
+build_kde_project kdevelop/kdevelop $KDEVELOP_VERSION
+build_kde_project kdevelop/kdev-php $KDEVELOP_VERSION
 
 # Build kdev-python
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH/kdevelop.appdir/usr/lib/
-build_project kdev-python $KDEVELOP_VERSION
+build_kde_project kdevelop/kdev-python $KDEVELOP_VERSION
 
 # Install some colorschemes
 cd $BUILD
@@ -383,7 +389,7 @@ cp /kdevelop.appdir/usr/lib/libexec/kf5/* /kdevelop.appdir/usr/bin/
 
 cd /
 if [ ! -d appimage-exec-wrapper ]; then
-    git clone git://anongit.kde.org/scratch/brauch/appimage-exec-wrapper
+    git clone https://invent.kde.org/brauch/appimage-exec-wrapper.git
 fi;
 cd /appimage-exec-wrapper/
 make clean
