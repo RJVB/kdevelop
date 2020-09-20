@@ -55,6 +55,19 @@ constexpr bool isClass(CXCursorKind CK)
     || CK == CXCursor_ObjCCategoryImplDecl;
 }
 
+// TODO: somehow this is (probably) the function to call in isKDevForwardDeclaration() but
+// I cannot seem to understand how to achieve that without raising a ton of 
+// uncomprehensible errors in builder.cpp (I can't even remove the ObjC cursor
+// kinds from the isClass function above?!)
+// TODO: remove this comment.
+constexpr bool isClassNoObjC(CXCursorKind CK)
+{
+    return isClassTemplate(CK)
+    || CK == CXCursor_StructDecl
+    || CK == CXCursor_ClassDecl
+    || CK == CXCursor_UnionDecl;
+}
+
 constexpr bool isFunction(CXCursorKind CK)
 {
     return CK == CXCursor_FunctionDecl
