@@ -59,6 +59,14 @@ public:
 private Q_SLOTS:
     void validateSourcePage( bool );
     void validateOpenUrl( const QUrl& );
+    /**
+    * Validates the name the user entered (or is entering) for the 
+    * project being opened and its project filename, sets that filename
+    * and then calls validateProjectInfo().
+    * The validation procedure ensures that the project filename obtained
+    * from the project name is valid filename by mapping illegal and
+    * potentially conflicting characters to placeholders.
+    */
     void validateProjectName( const QString& );
     void validateProjectManager( const QString&, const QString & );
     void storeFileList(KIO::Job*, const KIO::UDSEntryList&);
@@ -67,6 +75,7 @@ private Q_SLOTS:
 private:
     bool execNativeDialog();
     void validateProjectInfo();
+    QUrl m_projectDirUrl;
     QUrl m_url;
     QUrl m_selected;
     QString m_projectName;
