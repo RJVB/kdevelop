@@ -88,7 +88,6 @@ private:
     Q_PRIVATE_SLOT(d_func(), void modifiedOnDisk(KTextEditor::Document *, bool, KTextEditor::ModificationInterface::ModifiedOnDiskReason))
 
     void newDocumentStatus(KTextEditor::Document*);
-    void populateContextMenu(KTextEditor::View*, QMenu*);
     void textChanged(KTextEditor::Document*);
     void documentUrlChanged(KTextEditor::Document*);
     void slotDocumentLoaded();
