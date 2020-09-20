@@ -26,6 +26,9 @@ if(Meson_EXECUTABLE)
         OUTPUT_VARIABLE Meson_VERSION
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
+    message(STATUS "Found ${Meson_EXECUTABLE}, version ${Meson_VERSION}")
+else()
+    message(WARNING "Meson executable not found on path")
 endif()
 
 include(FindPackageHandleStandardArgs)
