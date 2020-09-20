@@ -58,7 +58,9 @@ class ProjectTreeView: public QTreeView
 
     protected:
         void keyPressEvent(QKeyEvent *event) override;
+        void resizeEvent(QResizeEvent *event) override;
         void dropEvent(QDropEvent* event) override;
+        bool eventFilter(QObject*, QEvent*) override;
         void drawBranches(QPainter* painter, const QRect& rect, const QModelIndex& index) const override;
 
     private:
@@ -68,6 +70,7 @@ class ProjectTreeView: public QTreeView
         KDevelop::IProject* getCurrentProject();
 
         QPointer<KDevelop::IProject> m_previousSelection;
+        bool m_isCocoa;
 };
 
 #endif // KDEVPLATFORM_PLUGIN_PROJECTTREEVIEW_H
