@@ -30,6 +30,8 @@ set(sublime_LIB_SRCS
 
     message.cpp
     messagewidget.cpp
+
+    kwidgetstyleselector.cpp
 )
 declare_qt_logging_category(sublime_LIB_SRCS
     TYPE LIBRARY
