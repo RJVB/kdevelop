@@ -85,7 +85,7 @@ void CMakeJob::start()
 
 QUrl CMakeJob::workingDirectory() const
 {
-    KDevelop::Path path = CMake::currentBuildDir( m_project );
+    KDevelop::Path path = CMake::currentCanonicalBuildDir( m_project );
     qCDebug(KDEV_CMAKEBUILDER) << "builddir: " << path;
     Q_ASSERT(path.isValid()); //We cannot get the project folder as a build directory!
     return path.toUrl();
@@ -115,7 +115,7 @@ QStringList CMakeJob::commandLine() const
 
     auto rt = ICore::self()->runtimeController()->currentRuntime();
     //if we are creating a new build directory, we'll want to specify the generator
-    QDir builddir(rt->pathInRuntime(CMake::currentBuildDir( m_project )).toLocalFile());
+    QDir builddir(rt->pathInRuntime(CMake::currentCanonicalBuildDir( m_project )).toLocalFile());
     if(!builddir.exists() || !builddir.exists(QStringLiteral("CMakeCache.txt"))) {
         CMakeBuilderSettings::self()->load();
         args << QStringLiteral("-G") << CMake::defaultGenerator();

@@ -116,7 +116,7 @@ bool CMakeManager::hasBuildInfo(ProjectBaseItem* item) const
 
 Path CMakeManager::buildDirectory(KDevelop::ProjectBaseItem *item) const
 {
-    return Path(CMake::currentBuildDir(item->project()));
+    return Path(CMake::currentCanonicalBuildDir(item->project()));
 }
 
 KDevelop::ProjectFolderItem* CMakeManager::import( KDevelop::IProject *project )

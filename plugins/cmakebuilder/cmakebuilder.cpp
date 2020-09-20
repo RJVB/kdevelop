@@ -233,7 +233,7 @@ KJob* CMakeBuilder::prune( KDevelop::IProject* project )
 
 KDevelop::IProjectBuilder* CMakeBuilder::builderForProject(KDevelop::IProject* p) const
 {
-    QString builddir = CMake::currentBuildDir( p ).toLocalFile();
+    QString builddir = CMake::currentCanonicalBuildDir( p ).toLocalFile();
     QMap<QString, IProjectBuilder*>::const_iterator it = m_builders.constBegin(), itEnd = m_builders.constEnd();
     for(; it!=itEnd; ++it) {
         if (QFile::exists(builddir+QLatin1Char('/')+it.key()))

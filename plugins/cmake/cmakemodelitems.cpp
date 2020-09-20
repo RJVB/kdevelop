@@ -32,7 +32,7 @@ QUrl CMakeTargetItem::builtUrl() const
     if (!m_builtUrl.isEmpty())
         return m_builtUrl.toUrl();
 
-    const KDevelop::Path buildDir = CMake::currentBuildDir(project());
+    const KDevelop::Path buildDir = CMake::currentCanonicalBuildDir(project());
     if (buildDir.isEmpty())
         return QUrl();
 
