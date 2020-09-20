@@ -818,7 +818,8 @@ void ProjectController::openProjectForUrl(const QUrl& sourceUrl) {
             d->m_foundProjectFile = false;
             return;
         }
-        QUrl oldTest = testAt.adjusted(QUrl::RemoveFilename);
+        QUrl oldTest = testAt;
+        testAt = testAt.adjusted(QUrl::RemoveFilename);
         if(oldTest == testAt)
             break;
     }
