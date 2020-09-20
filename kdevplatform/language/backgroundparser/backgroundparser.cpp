@@ -29,6 +29,7 @@
 #include <QMutexLocker>
 #include <QPointer>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QThread>
 
 #include <KConfigGroup>
@@ -55,6 +56,9 @@ using namespace KDevelop;
 
 namespace {
 const bool separateThreadForHighPriority = true;
+
+static qreal timingSum = 0;
+static qint64 timingCount = 0;
 
 /**
  * Elides string in @p path, e.g. "VEEERY/LONG/PATH" -> ".../LONG/PATH"
@@ -194,6 +198,7 @@ public:
         m_timer.setSingleShot(true);
         m_progressTimer.setSingleShot(true);
         m_progressTimer.setInterval(500);
+        m_totalTimer.invalidate();
 
         ThreadWeaver::setDebugLevel(true, 1);
 
@@ -425,7 +430,11 @@ public:
         if (qEnvironmentVariableIsSet("KDEV_BACKGROUNDPARSER_MAXTHREADS")) {
             m_parser->setThreadCount(qEnvironmentVariableIntValue("KDEV_BACKGROUNDPARSER_MAXTHREADS"));
         } else {
-            m_parser->setThreadCount(BACKWARDS_COMPATIBLE_ENTRY("Number of Threads", QThread::idealThreadCount()));
+            int defThreads = QThread::idealThreadCount();
+            if (defThreads >= 4) {
+                defThreads /= 2;
+            }
+            m_parser->setThreadCount(BACKWARDS_COMPATIBLE_ENTRY("Number of Threads", defThreads));
         }
 
         resume();
@@ -510,6 +519,8 @@ public:
     int m_progressMax = 0;
     int m_progressDone = 0;
     QTimer m_progressTimer;
+    QElapsedTimer m_totalTimer;
+    int m_totalJobs;
 };
 
 BackgroundParser::BackgroundParser(ILanguageController* languageController)
@@ -544,6 +555,9 @@ void BackgroundParser::aboutToQuit()
     Q_D(BackgroundParser);
 
     d->m_shuttingDown = true;
+    if (timingCount) {
+        qCInfo(LANGUAGE) << "Average parsing time per file:" << timingSum / timingCount << "seconds";
+    }
 }
 
 BackgroundParser::~BackgroundParser()
@@ -807,6 +821,10 @@ void BackgroundParser::updateProgressData()
         if (!d->m_progressTimer.isActive()) {
             d->m_progressTimer.start();
         }
+        if (!d->m_totalTimer.isValid()) {
+            d->m_totalTimer.start();
+            d->m_totalJobs = d->m_maxParseJobs;
+        }
     }
 
     // Cancel progress updating and hide progress-bar when parsing is done.
@@ -814,6 +832,17 @@ void BackgroundParser::updateProgressData()
         || (d->m_neededPriority == BackgroundParser::BestPriority && d->m_weaver.queueLength() == 0)) {
         if (d->m_progressTimer.isActive()) {
             d->m_progressTimer.stop();
+        }
+        if (d->m_totalTimer.isValid()) {
+            qreal elapsed = d->m_totalTimer.elapsed() / 1000.0;
+            d->m_totalTimer.invalidate();
+            if (d->m_totalJobs > 0 && qEnvironmentVariableIsSet("KDEV_BACKGROUNDPARSER_TIMINGS") && elapsed > 0.5) {
+                if (d->m_totalJobs > 1) {
+                    qCInfo(LANGUAGE) << "Parsed" << d->m_totalJobs << "file(s) in" << elapsed << "seconds";
+                }
+                timingSum += elapsed / d->m_totalJobs;
+                timingCount += 1;
+            }
         }
         emit d->m_parser->hideProgress(d->m_parser);
     }
