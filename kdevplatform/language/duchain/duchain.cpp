@@ -444,7 +444,18 @@ public:
 
         // qCDebug(LANGUAGE) << "duchain: removing document" << context->url().str();
         Q_ASSERT(hasChainForIndex(index));
+        if (!hasChainForIndex(index)) {
+            qCCritical(LANGUAGE) << Q_FUNC_INFO << "index" << index << "has no chain";
+            return;
+        }
         Q_ASSERT(m_chainsByUrl.contains(context->url(), context));
+        if (!m_chainsByUrl.contains(context->url(), context)) {
+            qCCritical(LANGUAGE) << Q_FUNC_INFO << "Context" << context << "has no registered chainByUrl";
+            if (context) {
+                qCritical() << "\t" << "url=" << context->url();
+            }
+            return;
+        }
 
         m_chainsByUrl.remove(context->url(), context);
 
@@ -457,6 +468,10 @@ public:
         l.relock();
 
         Q_ASSERT(hasChainForIndex(index));
+        if (!hasChainForIndex(index)) {
+            qCCritical(LANGUAGE) << Q_FUNC_INFO << "index" << index << "has no chain";
+            return;
+        }
 
         QMutexLocker lock(&DUChain::chainsByIndexLock);
         DUChain::chainsByIndex[index] = nullptr;
@@ -782,7 +797,7 @@ public:
             //Here we wait for all parsing-threads to stop their processing
             for (const auto language : qAsConst(languages)) {
                 if (lockFlag == TryLock) {
-                    if (!language->parseLock()->tryLockForWrite()) {
+                    if (!language->parseLock() || !language->parseLock()->tryLockForWrite()) {
                         qCDebug(LANGUAGE) << "Aborting cleanup because language plugin is still parsing:" <<
                             language->name();
                         // some language is still parsing, don't interfere with the cleanup
@@ -1601,7 +1616,7 @@ void DUChain::documentClosed(IDocument* document)
 
     const auto currentDocumentContexts = sdDUChainPrivate->m_openDocumentContexts;
     for (const ReferencedTopDUContext& top : currentDocumentContexts) {
-        if (top->url() == url)
+        if (!top || sdDUChainPrivate->m_referenceCounts[top] == 0 || top->url() == url)
             sdDUChainPrivate->m_openDocumentContexts.remove(top);
     }
 }
@@ -1709,10 +1724,15 @@ static void finalCleanup()
     qCDebug(LANGUAGE) << "doing final cleanup";
 
     int cleaned = 0;
+    int passes = 0;
     while ((cleaned = globalItemRepositoryRegistry().finalCleanup())) {
+        passes += 1;
         qCDebug(LANGUAGE) << "cleaned" << cleaned << "B";
         if (cleaned < 1000) {
             qCDebug(LANGUAGE) << "cleaned enough";
+            break;
+        } else if (passes >= 100) {
+            qCWarning(LANGUAGE) << "cleaned" << passes << "passes, last was" << cleaned << "B; that's enough";
             break;
         }
     }

@@ -97,6 +97,7 @@ bool DUChainLock::lockForRead(unsigned int timeout)
             } else {
                 //Fail!
                 d->changeOwnReaderRecursion(-1);
+                qWarning() << Q_FUNC_INFO << "timed out after" << t.elapsed()/1000.0 << "seconds";
                 return false;
             }
         }
@@ -127,6 +128,9 @@ bool DUChainLock::lockForWrite(uint timeout)
 
     Q_ASSERT(d->ownReaderRecursion() == 0);
 
+    if (d->ownReaderRecursion() != 0) {
+      return false;
+    }
 #if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
     if (d->m_writer.loadRelaxed() == QThread::currentThread()) {
 #else
@@ -170,6 +174,7 @@ bool DUChainLock::lockForWrite(uint timeout)
             QThread::usleep(uSleepTime);
         } else {
             //Fail!
+            qWarning() << Q_FUNC_INFO << "timed out after" << t.elapsed()/1000.0 << "seconds";
             return false;
         }
     }
@@ -214,6 +219,11 @@ DUChainReadLocker::DUChainReadLocker(DUChainLock* duChainLock, uint timeout)
     , m_locked(false)
     , m_timeout(timeout)
 {
+    // 10-12 seconds is an eternity. Pick a random value in this range
+    // so if multiple candidates compete there's always 1 that waits the longest
+    if (!timeout) {
+      m_timeout = 10000 + 2000 * qrand() / RAND_MAX;
+    }
     lock();
 }
 
@@ -258,6 +268,11 @@ DUChainWriteLocker::DUChainWriteLocker(DUChainLock* duChainLock, uint timeout)
     , m_locked(false)
     , m_timeout(timeout)
 {
+    // 10-12 seconds is an eternity. Pick a random value in this range
+    // so if multiple candidates compete there's always 1 that waits the longest
+    if (!timeout) {
+      m_timeout = 10000 + 2000 * qrand() / RAND_MAX;
+    }
     lock();
 }
 

@@ -529,7 +529,7 @@ public:
     }
 
     template <class Repository>
-    void deleteItem(unsigned short index, unsigned int hash, Repository& repository)
+    bool deleteItem(unsigned short index, unsigned int hash, Repository& repository)
     {
         ifDebugLostSpace(Q_ASSERT(!lostSpace()); )
 
@@ -548,6 +548,15 @@ public:
             currentIndex = followerIndex(currentIndex);
             //If this assertion triggers, the deleted item was not registered under the given hash
             Q_ASSERT(currentIndex);
+            if (!currentIndex) {
+              qWarning() << QStringLiteral("Bucket::deleteItem(%1,%2,%3)").arg(index).arg(hash).arg(repository.repositoryName())
+                << ": early return because currentIndex==0";
+              return false;
+            } else if (currentIndex == previousIndex) {
+              qWarning() << QStringLiteral("Bucket::deleteItem(%1,%2,%3)").arg(index).arg(hash).arg(repository.repositoryName())
+                << "early return because currentIndex==previousIndex==" << currentIndex;
+              return false;
+            }
         }
         Q_ASSERT(currentIndex == index);
 
@@ -618,6 +627,7 @@ public:
         }
 #endif
 //       Q_ASSERT(canAllocateItem(size));
+        return true;
     }
 
     ///@warning The returned item may be in write-protected memory, so never try doing a const_cast and changing some data
@@ -679,9 +689,10 @@ public:
     int finalCleanup(Repository& repository)
     {
         int changed = 0;
+        bool dirty = m_dirty;
 
-        while (m_dirty) {
-            m_dirty = false;
+        while (dirty) {
+            dirty = false;
 
             for (uint a = 0; a < ObjectMapSize; ++a) {
                 uint currentIndex = m_objectMap[a];
@@ -693,15 +704,24 @@ public:
 
                     if (!ItemRequest::persistent(item)) {
                         changed += item->itemSize();
-                        deleteItem(currentIndex, item->hash(), repository);
-                        m_dirty = true; //Set to dirty so we re-iterate
-                        break;
+                        if (deleteItem(currentIndex, item->hash(), repository)) {
+                            dirty = true; //Set to dirty so we re-iterate
+                            break;
+                        } else {
+                            qWarning() << "\tdidn't delete item of size" << item->itemSize();
+                        }
                     }
 
+                    uint prevIndex = currentIndex;
                     currentIndex = followerIndex(currentIndex);
+                    if (currentIndex == prevIndex) {
+                        qWarning() << Q_FUNC_INFO << "avoided deadloop in repository" << repository.repositoryName();
+                        currentIndex = 0;
+                    }
                 }
             }
         }
+        m_dirty = dirty;
         return changed;
     }
 
@@ -971,14 +991,23 @@ private:
     /// @param index the index of an item @return The index of the next item in the chain of items with a same local hash, or zero
     inline unsigned short followerIndex(unsigned short index) const
     {
-        Q_ASSERT(index >= 2);
-        return *reinterpret_cast<unsigned short*>(m_data + (index - 2));
+//         Q_ASSERT(index >= 2);
+        if (index >= 2) {
+            return *reinterpret_cast<unsigned short*>(m_data + (index - 2));
+        } else {
+            qWarning() << Q_FUNC_INFO << "index=" << index << "; returning 0";
+            return 0;
+        }
     }
 
     void setFollowerIndex(unsigned short index, unsigned short follower)
     {
-        Q_ASSERT(index >= 2);
-        *reinterpret_cast<unsigned short*>(m_data + (index - 2)) = follower;
+//         Q_ASSERT(index >= 2);
+        if (index >= 2) {
+          *reinterpret_cast<unsigned short*>(m_data + (index - 2)) = follower;
+        } else {
+          qWarning() << Q_FUNC_INFO << "index=" << index << "; follower set to 0 instead of" << follower;
+        }
     }
     // Only returns the current value if the item is actually free
     inline unsigned short freeSize(unsigned short index) const
@@ -1453,6 +1482,16 @@ public:
 
         //Make sure the index was reachable through the hash chain
         Q_ASSERT(bucketPtr);
+        if (!bucketPtr) {
+            qWarning() << Q_FUNC_INFO << "index" << index
+                << "not reachable through hash chain; previous bucket="
+                << previousBucketPtr << "next="
+                << (previousBucketPtr ? previousBucketPtr->nextBucketForHash(hash) : 0);
+            if (previousBucketPtr) {
+                previousBucketPtr->setNextBucketForHash(hash, 0);
+            }
+            return;
+        }
 
         --m_statItemCount;
 
