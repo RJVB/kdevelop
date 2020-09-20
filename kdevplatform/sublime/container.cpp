@@ -159,6 +159,11 @@ public:
     QToolButton* documentListButton;
     QMenu* documentListMenu;
     QHash<View*, QAction*> documentListActionForView;
+    bool m_isCocoa;
+
+    ContainerPrivate()
+        : m_isCocoa(QGuiApplication::platformName() == QStringLiteral("cocoa"))
+    {}
 
     /**
      * Updates the context menu which is shown when
@@ -217,7 +222,7 @@ public:
     void setAsDockMenu()
     {
 #ifdef Q_OS_MACOS
-        if (documentListMenu != currentDockMenu) {
+        if (m_isCocoa && documentListMenu != currentDockMenu) {
             documentListMenu->setAsDockMenu();
             currentDockMenu = documentListMenu;
         }
@@ -227,7 +232,7 @@ public:
     ~ContainerPrivate()
     {
 #ifdef Q_OS_MACOS
-        if (documentListMenu == currentDockMenu) {
+        if (m_isCocoa && documentListMenu == currentDockMenu) {
             QMenu().setAsDockMenu();
             currentDockMenu = nullptr;
         }
