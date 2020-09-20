@@ -158,6 +158,7 @@ public:
             addSubjob(importJob);
             ExecuteCompositeJob::start();
         } else {
+            qCWarning(CMAKE) << CMake::currentCMakeExecutable(project) << "doesn't support cmake-file-api mode, trying server mode to import" << project->name();
             tryCMakeServer();
         }
     }
@@ -178,7 +179,7 @@ private:
         Q_ASSERT(code > 0);
         Q_ASSERT(!server->isServerAvailable());
 
-        qCDebug(CMAKE) << "CMake does not provide server mode, using compile_commands.json to import" << project->name();
+        qCWarning(CMAKE) << CMake::currentCMakeExecutable(project) << "doesn't provide server mode, using compile_commands.json to import" << project->name();
 
         // parse the JSON file
         auto* job = new CMakeImportJsonJob(project, this);
