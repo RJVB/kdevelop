@@ -71,6 +71,8 @@ class QtHelpDocumentation : public KDevelop::IDocumentation
 
         static QtHelpProviderAbstract* s_provider;
 
+        bool viewInExternalBrowser() override;
+
     public Q_SLOTS:
         void viewContextMenuRequested(const QPoint& pos);
 

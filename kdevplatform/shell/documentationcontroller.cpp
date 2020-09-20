@@ -236,18 +236,20 @@ QList< IDocumentationProvider* > DocumentationController::documentationProviders
 void KDevelop::DocumentationController::showDocumentation(const IDocumentation::Ptr& doc)
 {
     Q_ASSERT_X(doc, Q_FUNC_INFO, "Null documentation pointer is unsupported.");
-    QWidget* w = ICore::self()->uiController()->findToolView(i18nc("@title:window", "Documentation"), m_factory, KDevelop::IUiController::CreateAndRaise);
-    if(!w) {
-        qCWarning(SHELL) << "Could not add documentation tool view";
-        return;
-    }
+    if (doc && !doc->viewInExternalBrowser()) {
+        QWidget* w = ICore::self()->uiController()->findToolView(i18nc("@title:window", "Documentation"), m_factory, KDevelop::IUiController::CreateAndRaise);
+        if(!w) {
+            qCWarning(SHELL) << "Could not add documentation tool view";
+            return;
+        }
 
-    auto* view = dynamic_cast<DocumentationView*>(w);
-    if( !view ) {
-        qCWarning(SHELL) << "Could not cast tool view" << w << "to DocumentationView class!";
-        return;
+        auto* view = dynamic_cast<DocumentationView*>(w);
+        if( !view ) {
+            qCWarning(SHELL) << "Could not cast tool view" << w << "to DocumentationView class!";
+            return;
+        }
+        view->showDocumentation(doc);
     }
-    view->showDocumentation(doc);
 }
 
 void DocumentationController::changedDocumentationProviders()

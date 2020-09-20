@@ -61,6 +61,14 @@ public:
 
     virtual IDocumentationProvider* provider() const = 0;
 
+    /** Documentation can override this method if it supports using an external browser.
+     * The method should trigger the external browser and return true in that case,
+     * or otherwise return false. When using an external browser the documentation
+     * toolview is not sollicited at all (i.e. it will not open nor be added to a toolbar).
+     * TODO: remove implementation
+     */
+    virtual bool viewInExternalBrowser() { return false; }
+
 Q_SIGNALS:
     void descriptionChanged();
 };

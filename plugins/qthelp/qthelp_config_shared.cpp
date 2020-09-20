@@ -1,6 +1,7 @@
 /*  This file is part of KDevelop
 
     Copyright 2010 Milian Wolff <mail@milianw.de>
+    Copyright 2017 René J.V. Bertin <rjvbertin@gmail.com>
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Library General Public
@@ -25,7 +26,8 @@
 
 void qtHelpReadConfig(QStringList& iconList, QStringList& nameList,
                       QStringList& pathList, QStringList& ghnsList,
-                      QString& searchDir, bool& loadQtDoc)
+                      QString& searchDir, bool& loadQtDoc,
+                      ExternalViewerSettings& extViewer)
 {
     KConfigGroup cg(KSharedConfig::openConfig(), "QtHelp Documentation");
     iconList = cg.readEntry("iconList", QStringList());
@@ -34,11 +36,15 @@ void qtHelpReadConfig(QStringList& iconList, QStringList& nameList,
     ghnsList = cg.readEntry("ghnsList", QStringList());
     searchDir = cg.readEntry("searchDir", QString());
     loadQtDoc = cg.readEntry("loadQtDocs", true);
+    // TODO: make global setting?
+    extViewer.useExtViewer = cg.readEntry("useExternalViewer", false);
+    extViewer.extViewerExecutable = cg.readEntry("externalViewerExecutable", QString());
 }
 
 void qtHelpWriteConfig(const QStringList& iconList, const QStringList& nameList,
                        const QStringList& pathList, const QStringList& ghnsList,
-                       const QString& searchDir, const bool loadQtDoc)
+                       const QString& searchDir, const bool loadQtDoc,
+                       const ExternalViewerSettings& extViewer)
 {
     KConfigGroup cg(KSharedConfig::openConfig(), "QtHelp Documentation");
     cg.writeEntry("iconList", iconList);
@@ -47,4 +53,6 @@ void qtHelpWriteConfig(const QStringList& iconList, const QStringList& nameList,
     cg.writeEntry("ghnsList", ghnsList);
     cg.writeEntry("searchDir", searchDir);
     cg.writeEntry("loadQtDocs", loadQtDoc);
+    cg.writeEntry("useExternalViewer", extViewer.useExtViewer);
+    cg.writeEntry("externalViewerExecutable", extViewer.extViewerExecutable);
 }

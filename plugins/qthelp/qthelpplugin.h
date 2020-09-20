@@ -42,6 +42,8 @@ class QtHelpPlugin : public KDevelop::IPlugin, public KDevelop::IDocumentationPr
         QList<QtHelpProvider*> qtHelpProviderLoaded();
         bool isQtHelpQtDocLoaded() const;
         bool isQtHelpAvailable() const;
+        bool useExternalViewer() const;
+        QString externalViewerExecutable() const;
 
         int configPages() const override;
         KDevelop::ConfigPage* configPage(int number, QWidget* parent) override;
@@ -59,6 +61,8 @@ class QtHelpPlugin : public KDevelop::IPlugin, public KDevelop::IDocumentationPr
         QList<QtHelpProvider*> m_qtHelpProviders;
         QtHelpQtDoc* m_qtDoc;
         bool m_loadSystemQtDoc;
+        bool m_useExternalViewer;
+        QString m_externalViewerExecutable;
 };
 
 #endif // QTHELPPLUGIN_H
