@@ -19,6 +19,7 @@
 
 #include "documentationview.h"
 
+#include <QEvent>
 #include <QWidgetAction>
 #include <QAction>
 #include <QIcon>
@@ -38,6 +39,7 @@
 #include <interfaces/idocumentationproviderprovider.h>
 #include <interfaces/idocumentationcontroller.h>
 #include <interfaces/iplugincontroller.h>
+#include <sublime/idealdockwidget.h>
 #include "documentationfindwidget.h"
 #include "standarddocumentationview.h"
 #include "debug.h"
@@ -80,10 +82,43 @@ DocumentationView::DocumentationView(QWidget* parent, ProvidersModel* model)
         }
     }
 
+    if (ICore::self()->shuttingDown()) {
+        KMessageBox::ButtonCode ret = KMessageBox::warningYesNo(this,
+                i18n("A documentation toolview (DocumentationView) is being created during shutdown.\n"
+                    "Do you want to report this (will cause a crash)?"));
+        if (ret == KMessageBox::Yes) {
+            qFatal("DocumentationView created during shutdown");
+        } else {
+            return;
+        }
+    }
+
     setFocusProxy(mIdentifiers);
 
     QMetaObject::invokeMethod(this, "initialize", Qt::QueuedConnection);
+
+    floatStandaloneWindows();
 }
+
+bool DocumentationView::event(QEvent* e)
+{
+    if (e->type() == QEvent::ParentChange) {
+        // we'll have to make the new IdealDockWidget parent
+        // behave the way we'd like it to behave.
+        floatStandaloneWindows();
+    }
+    return QWidget::event(e);
+}
+
+void DocumentationView::floatStandaloneWindows()
+{
+    Sublime::IdealDockWidget* dockWidget = dynamic_cast<Sublime::IdealDockWidget*>(parent());
+    if (dockWidget) {
+        dockWidget->setFloating(false);
+        dockWidget->setFloatsAsStandalone(true);
+    }
+}
+
 
 QList<QAction*> DocumentationView::contextMenuActions() const
 {

@@ -58,11 +58,15 @@ public Q_SLOTS:
     void changedProvider(int);
     void showHome();
 
+protected:
+    bool event(QEvent* e) override;
+
 private:
     void mousePressEvent(QMouseEvent* event) override;
     void setupActions();
     void updateView();
     void returnPressed();
+    void floatStandaloneWindows();
 
     QAction* mForward;
     QAction* mBack;
