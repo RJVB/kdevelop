@@ -36,6 +36,8 @@ class QObjectDecorator;
 class Weaver;
 }
 
+class KJob;
+
 namespace KDevelop {
 class DocumentChangeTracker;
 
@@ -160,7 +162,8 @@ public Q_SLOTS:
     void revertAllRequests(QObject* notifyWhenReady);
 
     /**
-     * Queues up the @p url to be parsed.
+     * Queues up the @p url to be parsed, assuming that the job will be under control of
+     * an existing JobController entry.
      * @p features The minimum features that should be computed for this top-context
      * @p priority A value that manages the order of parsing. Documents with lowest priority are parsed first.
      * @param notifyWhenReady An optional pointer to a QObject that should contain a slot
@@ -170,6 +173,16 @@ public Q_SLOTS:
      * @param flags Flags indicating how the document should be treated in the queue
      * @param delay_ms The delay in milliseconds to add the job with, or one of the values of the
      *                 ILanguageSupport::ReparseDelaySpecialValues enum.
+     */
+    void addControlledDocument(const IndexedString& url, QPointer<KJob> controlledJob,
+                     TopDUContext::Features features = TopDUContext::VisibleDeclarationsAndContexts,
+                     int priority = 0,
+                     QObject* notifyWhenReady = nullptr,
+                     ParseJob::SequentialProcessingFlags flags = ParseJob::IgnoresSequentialProcessing,
+                     int delay_ms = ILanguageSupport::DefaultDelay);
+    /**
+     * Like @f addControlledDocument() but exposes the background parser job to a generic JobController entry.
+     * @sa BackgroundParser::addControlledDocument .
      */
     void addDocument(const IndexedString& url,
                      TopDUContext::Features features = TopDUContext::VisibleDeclarationsAndContexts,
