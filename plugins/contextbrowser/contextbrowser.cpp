@@ -34,6 +34,8 @@
 #include <QTimer>
 #include <QToolButton>
 #include <QWidgetAction>
+#include <QApplication>
+#include <QDesktopWidget>
 
 #include <KActionCollection>
 #include <KLocalizedString>
@@ -628,12 +630,19 @@ QWidget* ContextBrowserPlugin::navigationWidgetForPosition(KTextEditor::View* vi
         m_currentToolTipDeclaration = IndexedDeclaration(decl);
 
         if (problemWidget && declWidget) {
-            auto* combinedWidget = new QuickOpenEmbeddedWidgetCombiner;
-            combinedWidget->layout()->addWidget(problemWidget);
-            combinedWidget->layout()->addWidget(declWidget);
-            return combinedWidget;
+            int maxHeight;
+            auto geom = QApplication::desktop()->availableGeometry(QCursor::pos());
+            maxHeight = geom.height() / 3;
+            if (problemWidget->sizeHint().height() + declWidget->sizeHint().height() <= maxHeight) {
+                auto* combinedWidget = new QuickOpenEmbeddedWidgetCombiner;
+                combinedWidget->layout()->addWidget(problemWidget);
+                combinedWidget->layout()->addWidget(declWidget);
+                return combinedWidget;
+            }
         }
-        if (problemWidget) {
+        if (declWidget) {
+            return declWidget;
+        } else if (problemWidget) {
             return problemWidget;
         }
         return declWidget;
