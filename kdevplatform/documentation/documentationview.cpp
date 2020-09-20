@@ -31,6 +31,7 @@
 #include <QMouseEvent>
 
 #include <KLocalizedString>
+#include <KMessageBox>
 
 #include <interfaces/icore.h>
 #include <interfaces/idocumentationprovider.h>
@@ -46,6 +47,10 @@ using namespace KDevelop;
 DocumentationView::DocumentationView(QWidget* parent, ProvidersModel* model)
     : QWidget(parent), mProvidersModel(model)
 {
+    if (ICore::self()->shuttingDown()) {
+        qCWarning(DOCUMENTATION) << "DocumentationView created during shutdown";
+    }
+
     setWindowIcon(QIcon::fromTheme(QStringLiteral("documentation"), windowIcon()));
     setWindowTitle(i18n("Documentation"));
 
@@ -63,6 +68,17 @@ DocumentationView::DocumentationView(QWidget* parent, ProvidersModel* model)
     setupActions();
 
     mCurrent = mHistory.end();
+
+    if (ICore::self()->shuttingDown()) {
+        KMessageBox::ButtonCode ret = KMessageBox::warningYesNo(this,
+                i18n("A documentation toolview (DocumentationView) is being created during shutdown.\n"
+                    "Do you want to report this (will cause a crash)?"));
+        if (ret == KMessageBox::Yes) {
+            qFatal("DocumentationView created during shutdown");
+        } else {
+            return;
+        }
+    }
 
     setFocusProxy(mIdentifiers);
 
@@ -286,7 +302,9 @@ void DocumentationView::updateView()
     if (mCurrent != mHistory.end()) {
         w = (*mCurrent)->documentationWidget(mFindDoc, this);
         Q_ASSERT(w);
-        QWidget::setTabOrder(mIdentifiers, w);
+        if (mIdentifiers->window() == w->window()) {
+            QWidget::setTabOrder(mIdentifiers, w);
+        }
 
         if (auto* const standardView = qobject_cast<StandardDocumentationView*>(w)) {
             connect(standardView, &StandardDocumentationView::browseForward, this, &DocumentationView::tryBrowseForward);
