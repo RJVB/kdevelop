@@ -96,6 +96,7 @@ public:
 
 private:
     TopDUContext* m_topContext;
+    friend class TopDUContext;
 };
 
 /**
@@ -342,6 +343,9 @@ protected:
     //Must be called after all imported top-contexts were loaded into the du-chain
     void rebuildDynamicImportStructure();
 
+    void addReference(ReferencedTopDUContext *ref);
+    void removeReference(ReferencedTopDUContext *ref);
+
     struct AliasChainElement;
     struct FindDeclarationsAcceptor;
     struct DeclarationChecker;
@@ -374,10 +378,13 @@ protected:
     friend class LocalIndexedProblem;
     friend class DeclarationId;
     friend class ParsingEnvironmentFile;
+    friend class ReferencedTopDUContext;
 
     TopDUContextLocalPrivate* m_local;
 
     class TopDUContextDynamicData* m_dynamicData;
+    QSet<ReferencedTopDUContext*> m_references;
+    QMutex m_referencesMutex;
 };
 
 /**
