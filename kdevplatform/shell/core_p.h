@@ -24,6 +24,7 @@
 #include <core.h>
 
 #include <QPointer>
+class QDir;
 
 namespace KDevelop
 {
@@ -71,6 +72,7 @@ public:
     bool m_cleanedUp;
     bool m_shuttingDown;
     Core::Setup m_mode;
+    QDir* m_tmpDir = nullptr;
 };
 
 }
