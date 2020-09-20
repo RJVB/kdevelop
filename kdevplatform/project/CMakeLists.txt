@@ -14,6 +14,7 @@ set(KDevPlatformProject_LIB_SRCS
     abstractfilemanagerplugin.cpp
     filemanagerlistjob.cpp
     projectfiltermanager.cpp
+    projectwatcher.cpp
     interfaces/iprojectbuilder.cpp
     interfaces/iprojectfilemanager.cpp
     interfaces/ibuildsystemmanager.cpp
