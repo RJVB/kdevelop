@@ -103,6 +103,8 @@ void ActiveToolTipManager::doVisibility()
         }
     }
 
+    // cache the cursor position (useful in case of a remote X11 connection)
+    const auto cursorPos = QCursor::pos();
     if (!fullGeometry.isEmpty()) {
         QRect oldFullGeometry = fullGeometry;
 #if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
@@ -118,15 +120,15 @@ void ActiveToolTipManager::doVisibility()
         if (fullGeometry.bottom() > screenGeometry.bottom()) {
             //Move up, avoiding the mouse-cursor
             fullGeometry.moveBottom(fullGeometry.top() - 10);
-            if (fullGeometry.adjusted(-20, -20, 20, 20).contains(QCursor::pos())) {
-                fullGeometry.moveBottom(QCursor::pos().y() - 20);
+            if (fullGeometry.adjusted(-20, -20, 20, 20).contains(cursorPos)) {
+                fullGeometry.moveBottom(cursorPos.y() - 20);
             }
         }
         if (fullGeometry.right() > screenGeometry.right()) {
             //Move to left, avoiding the mouse-cursor
             fullGeometry.moveRight(fullGeometry.left() - 10);
-            if (fullGeometry.adjusted(-20, -20, 20, 20).contains(QCursor::pos())) {
-                fullGeometry.moveRight(QCursor::pos().x() - 20);
+            if (fullGeometry.adjusted(-20, -20, 20, 20).contains(cursorPos)) {
+                fullGeometry.moveRight(cursorPos.x() - 20);
             }
         }
         // Now fit this to screen
@@ -150,7 +152,7 @@ void ActiveToolTipManager::doVisibility()
 
     //Always include the mouse cursor in the full geometry, to avoid
     //closing the tooltip unexpectedly
-    fullGeometry = fullGeometry.united(QRect(QCursor::pos(), QCursor::pos()));
+    fullGeometry = fullGeometry.united(QRect(cursorPos, cursorPos));
 
     //Set bounding geometry, and remove old tooltips
     for (auto it = registeredToolTips.begin(); it != registeredToolTips.end();) {
