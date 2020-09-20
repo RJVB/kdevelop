@@ -375,6 +375,7 @@ void PatchReviewPlugin::closeReview()
                 ICore::self()->uiController()->switchToArea( QStringLiteral("code"), KDevelop::IUiController::ThisWindow );
         }
     }
+    m_active =false;
 }
 
 void PatchReviewPlugin::cancelReview() {
@@ -395,6 +396,7 @@ void PatchReviewPlugin::startReview( IPatchSource* patch, IPatchReview::ReviewMo
     Q_UNUSED( mode );
     emit startingNewReview();
     setPatch( patch );
+    m_active = true;
     QMetaObject::invokeMethod( this, "updateReview", Qt::QueuedConnection );
 }
 
@@ -514,7 +516,8 @@ void PatchReviewPlugin::setPatch( IPatchSource* patch ) {
 
 PatchReviewPlugin::PatchReviewPlugin( QObject *parent, const QVariantList & )
     : KDevelop::IPlugin( QStringLiteral("kdevpatchreview"), parent ),
-    m_patch( nullptr ), m_factory( new PatchReviewToolViewFactory( this ) )
+    m_patch( nullptr ), m_factory( new PatchReviewToolViewFactory( this ) ),
+    m_active( false)
 {
     qRegisterMetaType<const Diff2::DiffModel*>( "const Diff2::DiffModel*" );
 
@@ -546,7 +549,9 @@ PatchReviewPlugin::PatchReviewPlugin( QObject *parent, const QVariantList & )
 }
 
 void PatchReviewPlugin::documentClosed( IDocument* doc ) {
-    removeHighlighting( doc->url() );
+    if (m_active) {
+        removeHighlighting( doc->url() );
+    }
 }
 
 void PatchReviewPlugin::documentSaved( IDocument* doc ) {
@@ -556,13 +561,13 @@ void PatchReviewPlugin::documentSaved( IDocument* doc ) {
     // Also, don't automatically update local patch sources, because
     // they may correspond to static files which don't match any more
     // after an edit was done.
-    if (m_patch && doc->url() != m_patch->file() && !qobject_cast<LocalPatchSource*>(m_patch.data())) {
+    if(m_active && m_patch && doc->url() != m_patch->file() && !qobject_cast<LocalPatchSource*>(m_patch.data())) {
         forceUpdate();
     }
 }
 
 void PatchReviewPlugin::textDocumentCreated( IDocument* doc ) {
-    if (m_patch) {
+    if (m_active && m_patch) {
         addHighlighting( doc->url(), doc );
     }
 }
