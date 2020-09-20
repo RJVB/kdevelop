@@ -27,6 +27,7 @@
 #include <KLocalizedString>
 
 #include <util/shellutils.h>
+#include <interfaces/icore.h>
 
 #include "abstractitemrepository.h"
 #include "debug.h"
@@ -63,9 +64,9 @@ bool shouldClear(const QString& path)
         return true;
     }
 
-    if (!dir.exists(QStringLiteral("version_%1").arg(staticItemRepositoryVersion()))) {
-        qCWarning(SERIALIZATION) << "version mismatch or no version hint; expected version:" <<
-            staticItemRepositoryVersion();
+    if (!dir.exists(QStringLiteral("version_%1").arg(staticItemRepositoryVersion(), 0, 16))) {
+       qCWarning(SERIALIZATION) << "version mismatch or no version hint; expected version:" <<
+            QString().setNum(staticItemRepositoryVersion(), 16);
         return true;
     }
 
@@ -216,9 +217,13 @@ void ItemRepositoryRegistry::registerRepository(AbstractItemRepository* reposito
     d->m_repositories.insert(repository, manager);
     if (!d->m_path.isEmpty()) {
         if (!repository->open(d->m_path)) {
-            d->deleteDataDirectory(d->m_path);
-            qCritical() << "failed to open a repository";
-            abort();
+            qCritical() << "failed to open repository" << repository->repositoryName() << "at" << d->m_path;
+            if (!ICore::self()->shuttingDown()) {
+                d->deleteDataDirectory(d->m_path, true);
+//                 abort();
+                // let's just try again and see what happens...
+                repository->open(d->m_path);
+            }
         }
     }
 }
@@ -308,7 +313,7 @@ bool ItemRepositoryRegistryPrivate::open(const QString& path)
     for (auto it = m_repositories.constBegin(), end = m_repositories.constEnd(); it != end; ++it) {
         if (!it.key()->open(path)) {
             deleteDataDirectory(path);
-            qCritical() << "failed to open a repository";
+            qCritical() << "failed to open repository" << it.key()->repositoryName() << "at" << path;
             abort();
         }
     }
@@ -341,8 +346,10 @@ void ItemRepositoryRegistry::store()
         it.key()->store();
     }
 
-    QFile versionFile(d->m_path + QStringLiteral("/version_%1").arg(staticItemRepositoryVersion()));
+    QFile versionFile(d->m_path + QStringLiteral("/version_%1").arg(staticItemRepositoryVersion(), 0, 16));
     if (versionFile.open(QIODevice::WriteOnly)) {
+        QTextStream out(&versionFile);
+        out << QCoreApplication::applicationPid();
         versionFile.close();
     } else {
         qCWarning(SERIALIZATION) << "Could not open version file for writing";
