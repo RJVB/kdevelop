@@ -180,7 +180,8 @@ QDir urlDir(const QList<QUrl>& urls) { return urlDir(urls.first()); } //TODO: co
 }
 
 GitPlugin::GitPlugin( QObject *parent, const QVariantList & )
-    : DistributedVersionControlPlugin(parent, QStringLiteral("kdevgit")), m_oldVersion(false), m_usePrefix(true)
+    : DistributedVersionControlPlugin(parent, QStringLiteral("kdevgit")), m_oldVersion(false)
+    , m_usePrefix(!qEnvironmentVariableIsSet("KDEV_GIT_DIFF_NOPREFIX"))
 {
     if (QStandardPaths::findExecutable(QStringLiteral("git")).isEmpty()) {
         setErrorDescription(i18n("Unable to find git executable. Is it installed on the system?"));
