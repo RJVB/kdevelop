@@ -4,6 +4,10 @@ add_definitions(-DTRANSLATION_DOMAIN=\"kdevsubversion\")
 # if someone wants to fix the code, I'd welcome it
 # but for now, we won't spend time on it...
 add_definitions(-DSVN_DEPRECATED=)
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    # this is for clang 5, so PATH_MAX is available
+    add_compile_options("SHELL:-include limits.h" "SHELL:-include linux/limits.h")
+endif()
 
 kde_enable_exceptions()
 
@@ -65,5 +69,11 @@ target_link_libraries(kdevsubversion
     KDev::Project
     kdevsvncpp
 )
+
+if(UNIX AND NOT APPLE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_link_libraries(kdevsubversion "-pthread")
+    endif()
+endif()
 
 install(PROGRAMS org.kde.kdevelop_svn.desktop DESTINATION ${KDE_INSTALL_APPDIR})
