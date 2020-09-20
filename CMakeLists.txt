@@ -11,6 +11,12 @@ set(KDEV_PLUGIN_VERSION 34)
 option(KDEVELOP_BUILD_IDE "Build the IDE" ON)
 option(KDEVELOP_BUILD_CLANG_PARSER "Build the Clang-based C/C++ parser (formerly kdev-clang)" ON)
 
+if(APPLE OR WIN32)
+    option(KDEVELOP_NATIVE_DIALOGS "Use native file dialogs instead of KDE dialogs" ON)
+else()
+    option(KDEVELOP_NATIVE_DIALOGS "Use native file dialogs instead of KDE dialogs" OFF)
+endif()
+
 # we need some parts of the ECM CMake helpers
 find_package (ECM 5.50.0 REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${KDevelop_SOURCE_DIR}/cmake/modules ${ECM_MODULE_PATH})
@@ -129,6 +135,10 @@ if(NOT Qt5_VERSION VERSION_LESS "5.12.0" AND NOT KF5_VERSION VERSION_LESS "5.56.
     add_definitions(
         -DQT_NO_FOREACH
     )
+endif()
+
+if(KDEVELOP_NATIVE_DIALOGS)
+    add_definitions(-DKDEV_USE_NATIVE_DIALOGS)
 endif()
 
 # Turn off missing-field-initializers warning for GCC to avoid noise from false positives with empty {}
