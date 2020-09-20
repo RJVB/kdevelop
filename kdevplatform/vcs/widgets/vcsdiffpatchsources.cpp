@@ -164,6 +164,7 @@ VCSDiffPatchSource::~VCSDiffPatchSource()
 {
     QFile::remove(m_file.toLocalFile());
     delete m_updater;
+    qDebug() << "~VCSDiffPatchSource()" << this;
 }
 
 QUrl VCSDiffPatchSource::baseDir() const {
@@ -218,6 +219,10 @@ void VCSDiffPatchSource::update() {
 
 VCSCommitDiffPatchSource::~VCSCommitDiffPatchSource() {
     delete m_commitMessageWidget.data();
+//     if (m_commitMessageWidget.data()) {
+//         m_commitMessageWidget.data()->deleteLater();
+//     }
+    qDebug() << "~VCSCommitDiffPatchSource()" << this;
 }
 
 bool VCSCommitDiffPatchSource::canSelectFiles() const {
