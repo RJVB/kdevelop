@@ -127,7 +127,7 @@ QList<QAction*> View::toolBarActions() const
     Q_D(const View);
 
     auto* tooldoc = qobject_cast<ToolDocument*>(document());
-    if( tooldoc )
+    if( tooldoc && d->widget )
     {
         return tooldoc->factory()->toolBarActions( d->widget );
     }
@@ -139,7 +139,7 @@ QList< QAction* > View::contextMenuActions() const
     Q_D(const View);
 
     auto* tooldoc = qobject_cast<ToolDocument*>(document());
-    if( tooldoc )
+    if( tooldoc && d->widget )
     {
         return tooldoc->factory()->contextMenuActions( d->widget );
     }
