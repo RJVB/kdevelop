@@ -2,6 +2,7 @@
  * This file is part of KDevelop
  * Copyright 2010 Aleix Pol Gonzalez <aleixpol@kde.org>
  * Copyright 2016 Igor Kushnir <igorkuo@gmail.com>
+ * Copyright 2017-20 René J.V. Bertin <rjvbertin@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Library General Public License as
@@ -20,6 +21,7 @@
  */
 
 #include "standarddocumentationview.h"
+
 #include "documentationfindwidget.h"
 #include "debug.h"
 
@@ -32,6 +34,145 @@
 #include <QContextMenuEvent>
 #include <QMouseEvent>
 #include <QMenu>
+
+#include "standarddocumentationview_p.h"
+
+using namespace KDevelop;
+
+// common code shared with the QTextBrowser variant in standarddocumentationview_qtb.cpp
+
+StandardDocumentationView::StandardDocumentationView(DocumentationFindWidget* findWidget, QWidget* parent)
+    : QWidget(parent)
+    , d_ptr(new StandardDocumentationViewPrivate)
+{
+    Q_D(StandardDocumentationView);
+
+    auto mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    setLayout(mainLayout);
+
+    d->init(this);
+
+    findWidget->setEnabled(true);
+    connect(findWidget, &DocumentationFindWidget::searchRequested, this, &StandardDocumentationView::search);
+    connect(findWidget, &DocumentationFindWidget::searchDataChanged, this, &StandardDocumentationView::searchIncremental);
+    connect(findWidget, &DocumentationFindWidget::searchFinished, this, &StandardDocumentationView::finishSearch);
+}
+
+KDevelop::StandardDocumentationView::~StandardDocumentationView()
+{
+#if !defined(USE_QTEXTBROWSER)
+    Q_D(StandardDocumentationView);
+
+    // Prevent getting a loadFinished() signal on destruction.
+    disconnect(d->m_view, nullptr, this, nullptr);
+#endif
+}
+
+void StandardDocumentationView::initZoom(const QString& configSubGroup)
+{
+    Q_D(StandardDocumentationView);
+
+    Q_ASSERT_X(!d->m_zoomController, "StandardDocumentationView::initZoom", "Can not initZoom a second time.");
+
+    const KConfigGroup outerGroup(KSharedConfig::openConfig(), QStringLiteral("Documentation View"));
+    const KConfigGroup configGroup(&outerGroup, configSubGroup);
+    d->m_zoomController = new ZoomController(configGroup, this);
+    connect(d->m_zoomController, &ZoomController::factorChanged,
+            this, &StandardDocumentationView::updateZoomFactor);
+    updateZoomFactor(d->m_zoomController->factor());
+}
+
+void StandardDocumentationView::setDocumentation(const IDocumentation::Ptr& doc)
+{
+    Q_D(StandardDocumentationView);
+
+    if(d->m_doc)
+        disconnect(d->m_doc.data());
+    d->m_doc = doc;
+    update();
+    if(d->m_doc)
+        connect(d->m_doc.data(), &IDocumentation::descriptionChanged, this, &StandardDocumentationView::update);
+}
+
+void StandardDocumentationView::update()
+{
+    Q_D(StandardDocumentationView);
+
+    if(d->m_doc) {
+        setHtml(d->m_doc->description());
+    } else
+        qCDebug(DOCUMENTATION) << "calling StandardDocumentationView::update() on an uninitialized view";
+}
+
+void StandardDocumentationView::contextMenuEvent(QContextMenuEvent* event)
+{
+    auto menu = createStandardContextMenu(event->pos());
+    if (menu->isEmpty()) {
+        delete menu;
+        return;
+    }
+
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    menu->exec(event->globalPos());
+}
+
+void StandardDocumentationView::keyReleaseEvent(QKeyEvent* event)
+{
+    // Handle keyReleaseEvent instead of the usual keyPressEvent as a workaround
+    // for the conflicting reset font size Ctrl+0 shortcut added into KTextEditor
+    // in version 5.60. This new global shortcut prevents the Qt::Key_0 part of the
+    // shortcut from reaching KeyPress events, but it doesn't affect KeyRelease events.
+    // The end result is that Ctrl+0 always resets font size in the text editor
+    // because its shortcut is global. In addition, Ctrl+0 resets zoom factor in
+    // the current documentation provider if Documentation tool view has focus.
+    // Unfortunately there is no way to reset documentation zoom factor without
+    // simultaneously resetting font size in the text editor.
+    // An alternative workaround - creating one more Ctrl+0 shortcut -
+    // inevitably leads to conflicts with the KTextEditor's global shortcut.
+    Q_D(StandardDocumentationView);
+
+    if (d->m_zoomController && d->m_zoomController->handleKeyPressEvent(event)) {
+        return;
+    }
+    QWidget::keyReleaseEvent(event);
+}
+
+bool StandardDocumentationView::isUrlSchemeSupported(const QUrl& url)
+{
+    const QString& scheme = url.scheme();
+    return scheme.isEmpty()
+        || scheme == QLatin1String("file")
+        || scheme == QLatin1String("qrc")
+        || scheme == QLatin1String("data")
+        || scheme == QLatin1String("qthelp")
+        || scheme == QLatin1String("man")
+        || scheme == QLatin1String("help")
+        || scheme == QLatin1String("about");
+}
+
+// default loadResource overload, currently used only by the QTextBrowser variant
+// see QTextBrowser::loadResource
+bool StandardDocumentationView::loadResource(int type, QUrl& url, QVariant& content)
+{
+    Q_UNUSED(type);
+    Q_UNUSED(url);
+    Q_UNUSED(content);
+    qCDebug(DOCUMENTATION) << "default loadResource() returns false";
+    return false;
+}
+
+StandardDocumentationViewPrivate::~StandardDocumentationViewPrivate()
+{
+#if !defined(USE_QTEXTBROWSER) && !defined(USE_QTWEBKIT)
+    // make sure the page is deleted before the profile
+    // see https://doc.qt.io/qt-5/qwebenginepage.html#QWebEnginePage-1
+    delete m_page;
+#endif
+}
+
+#ifndef USE_QTEXTBROWSER
+// code specific to the QtWebKit/QtWebEngine variant
 
 #ifdef USE_QTWEBKIT
 #include <QFontDatabase>
@@ -49,10 +190,8 @@
 #include <QWebEngineProfile>
 #endif
 
-using namespace KDevelop;
-
 #ifndef USE_QTWEBKIT
-class StandardDocumentationPage : public QWebEnginePage
+class KDevelop::StandardDocumentationPage : public QWebEnginePage
 {
     Q_OBJECT
 public:
@@ -82,81 +221,47 @@ private:
 };
 #endif
 
-class KDevelop::StandardDocumentationViewPrivate
+void StandardDocumentationViewPrivate::init(StandardDocumentationView* parent)
 {
-public:
-    ZoomController* m_zoomController = nullptr;
-    IDocumentation::Ptr m_doc;
-
+    m_parent = parent;
 #ifdef USE_QTWEBKIT
-    QWebView *m_view = nullptr;
-    void init(StandardDocumentationView* parent)
-    {
-        m_view = new QWebView(parent);
-        QObject::connect(m_view, &QWebView::linkClicked, parent, &StandardDocumentationView::linkClicked);
+    m_view = new QWebView(parent);
+    QObject::connect(m_view, &QWebView::linkClicked, parent, &StandardDocumentationView::linkClicked);
 #else
-    QWebEngineView* m_view = nullptr;
-    StandardDocumentationPage* m_page = nullptr;
-
-    ~StandardDocumentationViewPrivate()
-    {
-        // make sure the page is deleted before the profile
-        // see https://doc.qt.io/qt-5/qwebenginepage.html#QWebEnginePage-1
-        delete m_page;
+    // prevent QWebEngine (Chromium) from overriding the signal handlers of KCrash
+    const auto chromiumFlags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
+    if (!chromiumFlags.contains("disable-in-process-stack-traces")) {
+        qputenv("QTWEBENGINE_CHROMIUM_FLAGS", chromiumFlags + " --disable-in-process-stack-traces");
     }
-
-    void init(StandardDocumentationView* parent)
-    {
-        // prevent QWebEngine (Chromium) from overriding the signal handlers of KCrash
-        const auto chromiumFlags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
-        if (!chromiumFlags.contains("disable-in-process-stack-traces")) {
-            qputenv("QTWEBENGINE_CHROMIUM_FLAGS", chromiumFlags + " --disable-in-process-stack-traces");
-        }
-        // not using the shared default profile here:
-        // prevents conflicts with qthelp scheme handler being registered onto that single default profile
-        // due to async deletion of old pages and their CustomSchemeHandler instance
-        auto* profile = new QWebEngineProfile(parent);
-        m_page = new StandardDocumentationPage(profile, parent);
-        m_view = new QWebEngineView(parent);
-        m_view->setPage(m_page);
+    // not using the shared default profile here:
+    // prevents conflicts with qthelp scheme handler being registered onto that single default profile
+    // due to async deletion of old pages and their CustomSchemeHandler instance
+    auto* profile = new QWebEngineProfile(parent);
+    m_page = new StandardDocumentationPage(profile, parent);
+    m_view = new QWebEngineView(parent);
+    m_view->setPage(m_page);
 #endif
-        m_view->setContextMenuPolicy(Qt::NoContextMenu);
+    m_view->setContextMenuPolicy(Qt::NoContextMenu);
 
-        // workaround for Qt::NoContextMenu broken with QWebEngineView, contextmenu event is always eaten
-        // see https://bugreports.qt.io/browse/QTBUG-62345
-        // we have to enforce deferring of event ourselves in the event filter.
-        // TODO: remove the context menu workaround (most of this comment and ContextMenu-related code in
-        // StandardDocumentationView::eventFilter()) once we require Qt 5.10 or later, because
-        // QTBUG-62345 was fixed in Qt 5.10.0 Beta 4.
-        // The event filter is necessary for handling mouse events since they are swallowed by
-        // QWebView and QWebEngineView.
-        m_view->installEventFilter(parent);
-    }
-};
+    // workaround for Qt::NoContextMenu broken with QWebEngineView, contextmenu event is always eaten
+    // see https://bugreports.qt.io/browse/QTBUG-62345
+    // we have to enforce deferring of event ourselves in the event filter.
+    // TODO: remove the context menu workaround (most of this comment and ContextMenu-related code in
+    // StandardDocumentationView::eventFilter()) once we require Qt 5.10 or later, because
+    // QTBUG-62345 was fixed in Qt 5.10.0 Beta 4.
+    // The event filter is necessary for handling mouse events since they are swallowed by
+    // QWebView and QWebEngineView.
+    m_view->installEventFilter(parent);
+    parent->layout()->addWidget(m_view);
+}
 
-StandardDocumentationView::StandardDocumentationView(DocumentationFindWidget* findWidget, QWidget* parent)
-    : QWidget(parent)
-    , d_ptr(new StandardDocumentationViewPrivate)
+void StandardDocumentationViewPrivate::setup()
 {
-    Q_D(StandardDocumentationView);
-
-    auto mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
-    setLayout(mainLayout);
-
-    d->init(this);
-    layout()->addWidget(d->m_view);
-
-    findWidget->setEnabled(true);
-    connect(findWidget, &DocumentationFindWidget::searchRequested, this, &StandardDocumentationView::search);
-    connect(findWidget, &DocumentationFindWidget::searchDataChanged, this, &StandardDocumentationView::searchIncremental);
-    connect(findWidget, &DocumentationFindWidget::searchFinished, this, &StandardDocumentationView::finishSearch);
-
 #ifdef USE_QTWEBKIT
     QFont sansSerifFont = QFontDatabase::systemFont(QFontDatabase::GeneralFont);
     QFont monospaceFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
 
-    QWebSettings* s = d->m_view->settings();
+    QWebSettings* s = m_view->settings();
 
     s->setFontFamily(QWebSettings::StandardFont, sansSerifFont.family());
     s->setFontFamily(QWebSettings::SerifFont, QStringLiteral("Serif"));
@@ -181,27 +286,17 @@ StandardDocumentationView::StandardDocumentationView(DocumentationFindWidget* fi
     // "flickering" and also to hide font size "jumping". Secondly, we reset position inside page
     // after loading with using standard QWebFrame method scrollToAnchor().
 
-    connect(d->m_view, &QWebView::loadStarted, d->m_view, [this]() {
-        Q_D(StandardDocumentationView);
-        d->m_view->setUpdatesEnabled(false);
+    m_parent->connect(m_view, &QWebView::loadStarted, m_view, [this]() {
+        m_view->setUpdatesEnabled(false);
     });
 
-    connect(d->m_view, &QWebView::loadFinished, this, [this](bool) {
-        Q_D(StandardDocumentationView);
-        if (d->m_view->url().isValid()) {
-            d->m_view->page()->mainFrame()->scrollToAnchor(d->m_view->url().fragment());
-        }
-        d->m_view->setUpdatesEnabled(true);
-    });
+    m_parent->connect(m_view, &QWebView::loadFinished, m_parent, [this](bool) {
+        if (m_view->url().isValid()) {
+            m_view->page()->mainFrame()->scrollToAnchor(m_view->url().fragment());
+         }
+        m_view->setUpdatesEnabled(true);
+     });
 #endif
-}
-
-KDevelop::StandardDocumentationView::~StandardDocumentationView()
-{
-    Q_D(StandardDocumentationView);
-
-    // Prevent getting a loadFinished() signal on destruction.
-    disconnect(d->m_view, nullptr, this, nullptr);
 }
 
 void StandardDocumentationView::search ( const QString& text, DocumentationFindWidget::FindOptions options )
@@ -255,42 +350,6 @@ void StandardDocumentationView::finishSearch()
 
     // passing emptry string to reset search, as told in API docs
     d->m_view->page()->findText(QString());
-}
-
-void StandardDocumentationView::initZoom(const QString& configSubGroup)
-{
-    Q_D(StandardDocumentationView);
-
-    Q_ASSERT_X(!d->m_zoomController, "StandardDocumentationView::initZoom", "Can not initZoom a second time.");
-
-    const KConfigGroup outerGroup(KSharedConfig::openConfig(), QStringLiteral("Documentation View"));
-    const KConfigGroup configGroup(&outerGroup, configSubGroup);
-    d->m_zoomController = new ZoomController(configGroup, this);
-    connect(d->m_zoomController, &ZoomController::factorChanged,
-            this, &StandardDocumentationView::updateZoomFactor);
-    updateZoomFactor(d->m_zoomController->factor());
-}
-
-void StandardDocumentationView::setDocumentation(const IDocumentation::Ptr& doc)
-{
-    Q_D(StandardDocumentationView);
-
-    if(d->m_doc)
-        disconnect(d->m_doc.data());
-    d->m_doc = doc;
-    update();
-    if(d->m_doc)
-        connect(d->m_doc.data(), &IDocumentation::descriptionChanged, this, &StandardDocumentationView::update);
-}
-
-void StandardDocumentationView::update()
-{
-    Q_D(StandardDocumentationView);
-
-    if(d->m_doc) {
-        setHtml(d->m_doc->description());
-    } else
-        qCDebug(DOCUMENTATION) << "calling StandardDocumentationView::update() on an uninitialized view";
 }
 
 void KDevelop::StandardDocumentationView::setOverrideCss(const QUrl& url)
@@ -375,7 +434,7 @@ void KDevelop::StandardDocumentationView::setDelegateLinks(bool delegate)
 #endif
 }
 
-QMenu* StandardDocumentationView::createStandardContextMenu()
+QMenu* StandardDocumentationView::createStandardContextMenu(const QPoint&)
 {
     Q_D(StandardDocumentationView);
 
@@ -396,6 +455,7 @@ QMenu* StandardDocumentationView::createStandardContextMenu()
 bool StandardDocumentationView::eventFilter(QObject* object, QEvent* event)
 {
     Q_D(StandardDocumentationView);
+
 #ifndef USE_QTWEBKIT
     if (object == d->m_view) {
         // help QWebEngineView properly behave like expected as if Qt::NoContextMenu was set
@@ -442,18 +502,6 @@ bool StandardDocumentationView::eventFilter(QObject* object, QEvent* event)
     return QWidget::eventFilter(object, event);
 }
 
-void StandardDocumentationView::contextMenuEvent(QContextMenuEvent* event)
-{
-    auto menu = createStandardContextMenu();
-    if (menu->isEmpty()) {
-        delete menu;
-        return;
-    }
-
-    menu->setAttribute(Qt::WA_DeleteOnClose);
-    menu->exec(event->globalPos());
-}
-
 void StandardDocumentationView::updateZoomFactor(double zoomFactor)
 {
     Q_D(StandardDocumentationView);
@@ -461,26 +509,14 @@ void StandardDocumentationView::updateZoomFactor(double zoomFactor)
     d->m_view->setZoomFactor(zoomFactor);
 }
 
-void StandardDocumentationView::keyReleaseEvent(QKeyEvent* event)
+QWidget* StandardDocumentationView::view() const
 {
-    // Handle keyReleaseEvent instead of the usual keyPressEvent as a workaround
-    // for the conflicting reset font size Ctrl+0 shortcut added into KTextEditor
-    // in version 5.60. This new global shortcut prevents the Qt::Key_0 part of the
-    // shortcut from reaching KeyPress events, but it doesn't affect KeyRelease events.
-    // The end result is that Ctrl+0 always resets font size in the text editor
-    // because its shortcut is global. In addition, Ctrl+0 resets zoom factor in
-    // the current documentation provider if Documentation tool view has focus.
-    // Unfortunately there is no way to reset documentation zoom factor without
-    // simultaneously resetting font size in the text editor.
-    // An alternative workaround - creating one more Ctrl+0 shortcut -
-    // inevitably leads to conflicts with the KTextEditor's global shortcut.
-    Q_D(StandardDocumentationView);
+    const Q_D(StandardDocumentationView);
 
-    if (d->m_zoomController && d->m_zoomController->handleKeyPressEvent(event)) {
-        return;
-    }
-    QWidget::keyReleaseEvent(event);
+    return d->m_view;
 }
+
+#endif // !USE_QTEXTBROWSER
 
 #ifndef USE_QTWEBKIT
 #include "standarddocumentationview.moc"

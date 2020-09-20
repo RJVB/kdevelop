@@ -39,6 +39,8 @@ class QNetworkAccessManager;
 class QtHelpProviderAbstract;
 class QTemporaryFile;
 
+class QtHelpDocumentationView;
+
 class QtHelpDocumentation : public KDevelop::IDocumentation
 {
     Q_OBJECT
@@ -98,6 +100,8 @@ class QtHelpDocumentation : public KDevelop::IDocumentation
 
         KDevelop::StandardDocumentationView* lastView;
         QPointer<QTemporaryFile> m_lastStyleSheet;
+
+    friend class QtHelpDocumentationView;
 };
 
 class HomeDocumentation : public KDevelop::IDocumentation
