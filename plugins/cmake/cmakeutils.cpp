@@ -18,6 +18,7 @@
  * 02110-1301, USA.
  */
 
+#include "config-kdevelop.h"
 #include "cmakeutils.h"
 #include "cmakeprojectdata.h"
 
@@ -345,7 +346,10 @@ QString currentBuildType( KDevelop::IProject* project, int builddir )
 
 QString findExecutable()
 {
-    auto cmake = QStandardPaths::findExecutable(QStringLiteral("cmake"));
+    auto cmake = QStandardPaths::findExecutable(QStringLiteral("cmake"), QStringList(QStringLiteral(KDEVELOP_INSTALL_PREFIX"/bin")));
+    if (cmake.isEmpty()) {
+        cmake = QStandardPaths::findExecutable(QStringLiteral("cmake"));
+    }
 #ifdef Q_OS_WIN
     if (cmake.isEmpty())
         cmake = QStandardPaths::findExecutable(QStringLiteral("cmake"), {
