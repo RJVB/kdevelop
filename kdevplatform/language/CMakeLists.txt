@@ -210,7 +210,9 @@ PRIVATE
     KF5::Archive
     Grantlee5::Templates
 )
-target_link_libraries(KDevPlatformLanguage LINK_PRIVATE ${LMDB_LIBRARIES} ${PKG_LZ4_LIBRARIES})
+target_link_libraries(KDevPlatformLanguage LINK_PRIVATE
+    ${LMDB_LIBRARIES}
+    -L${PKG_LZ4_LIBRARY_DIRS} ${PKG_LZ4_LIBRARIES})
 
 install(FILES
     assistant/renameaction.h
