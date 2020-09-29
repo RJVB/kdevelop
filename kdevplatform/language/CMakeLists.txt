@@ -212,7 +212,7 @@ PRIVATE
 )
 target_link_libraries(KDevPlatformLanguage LINK_PRIVATE
     ${LMDB_LIBRARIES}
-    -L${PKG_LZ4_LIBRARY_DIRS} ${PKG_LZ4_LIBRARIES})
+    -L${PKG_LZ4_LIBDIR} ${PKG_LZ4_LIBRARIES})
 
 install(FILES
     assistant/renameaction.h
