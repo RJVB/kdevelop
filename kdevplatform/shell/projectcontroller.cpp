@@ -110,7 +110,7 @@ public:
     bool m_foundProjectFile; //Temporary flag used while searching the hierarchy for a project file
     bool m_cleaningUp; //Temporary flag enabled while destroying the project-controller
     ProjectChangesModel* m_changesModel = nullptr;
-    QHash< IProject*, QPointer<KJob> > m_parseJobs; // parse jobs that add files from the project to the background parser.
+    QHash<IProject*, KJob*> m_parseJobs; // parse jobs that add files from the project to the background parser.
     QList<IProject*> m_finaliseProjectImports; // project dir watchers and/or parse jobs waiting to be started
     QHash<IProject*, QElapsedTimer*> m_timers; // TEMPORARY: project load timers
     static QElapsedTimer m_timer; // TEMPORARY: session-wide project load timer
@@ -1134,6 +1134,9 @@ void ProjectController::takeProject(IProject* proj)
     // loading might have failed
     d->m_currentlyOpening.removeAll(proj->projectFile().toUrl());
     d->m_projects.removeAll(proj);
+    if (auto* job = d->m_parseJobs.value(proj)) {
+        job->kill(); // Removes job from m_parseJobs.
+    }
     d->m_finaliseProjectImports.removeAll(proj);
     emit projectClosing(proj);
     //Core::self()->saveSettings();     // The project file is being closed.
@@ -1437,16 +1440,23 @@ QString ProjectController::mapSourceBuild( const QString& path_, bool reverse, b
     return QString();
 }
 
-    void KDevelop::ProjectController::reparseProject(IProject *project, bool forceUpdate, bool forceAll)
-    {
+void ProjectController::reparseProject(IProject* project, bool forceUpdate, bool forceAll)
+{
     Q_D(ProjectController);
 
-    if (auto job = d->m_parseJobs.value(project)) {
-        job->kill();
+    if (auto* oldJob = d->m_parseJobs.value(project)) {
+        oldJob->kill(); // Removes oldJob from m_parseJobs.
     }
 
-    d->m_parseJobs[project] = new KDevelop::ParseProjectJob(project, forceUpdate, forceAll);
-    ICore::self()->runController()->registerJob(d->m_parseJobs[project]);
+    auto& job = d->m_parseJobs[project];
+    job = new ParseProjectJob(project, forceUpdate, forceAll || parseAllProjectSources());
+    connect(job, &KJob::finished, this, [d, project](KJob* job) {
+        const auto it = d->m_parseJobs.constFind(project);
+        if (it != d->m_parseJobs.cend() && *it == job) {
+            d->m_parseJobs.erase(it);
+        }
+    });
+    ICore::self()->runController()->registerJob(job);
 }
 
 }
