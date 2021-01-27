@@ -869,7 +869,7 @@ struct CreateOutlineDialog
                     // already called 'widget->show()'.
                     auto list = dialog->widget()->ui.list;
                     QMetaObject::invokeMethod(list, "setCurrentIndex", Qt::QueuedConnection, Q_ARG(QModelIndex, index));
-                    QMetaObject::invokeMethod(list, "scrollTo", Qt::QueuedConnection, Q_ARG(const QModelIndex, index), Q_ARG(QAbstractItemView::ScrollHint, QAbstractItemView::PositionAtCenter));
+//                     QMetaObject::invokeMethod(list, "scrollTo", Qt::QueuedConnection, Q_ARG(const QModelIndex, index), Q_ARG(QAbstractItemView::ScrollHint, QAbstractItemView::PositionAtCenter));
                 }
                 ++num;
             }
@@ -1089,6 +1089,15 @@ bool QuickOpenLineEdit::eventFilter(QObject* obj, QEvent* e)
             return true; // eat event
         }
         break;
+    case QEvent::MouseButtonRelease:
+        if (obj == this) {
+            if (--m_newlyOpened == 0) {
+                deactivate();
+                e->accept();
+                return true; // eat event
+            }
+        }
+        break;
     case QEvent::WindowActivate:
     case QEvent::WindowDeactivate:
         QMetaObject::invokeMethod(this, "checkFocus", Qt::QueuedConnection);
@@ -1137,6 +1146,7 @@ void QuickOpenLineEdit::activate()
     qCDebug(PLUGIN_QUICKOPEN) << "activating";
     setText(QString());
     setStyleSheet(QString());
+    m_newlyOpened = 2;
     qApp->installEventFilter(this);
 }
 void QuickOpenLineEdit::deactivate()

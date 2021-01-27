@@ -257,7 +257,8 @@ public:
     {
         m_weaver.resume();
         m_weaver.finish();
-        if (m_bgControlledJobProxy) {
+        if (m_bgControlledJobProxy && m_bgControlledJobProxy->m_proxied == this) {
+            m_bgControlledJobProxy->m_proxied = nullptr;
             delete m_bgControlledJobProxy;
         }
     }
@@ -343,7 +344,7 @@ public:
             emit m_parser->showMessage(m_parser, i18n("Parsing: %1", elidedPathString));
 
             ThreadWeaver::QObjectDecorator* decorator = nullptr;
-            {
+            if (!m_killedViaProxy) {
                 // copy shared data before unlocking the mutex
                 const auto parsePlanConstIt = m_documents.constFind(url);
                 const DocumentParsePlan parsePlan = *parsePlanConstIt;
@@ -357,6 +358,8 @@ public:
                 m_mutex.unlock();
                 decorator = createParseJob(url, parsePlan);
                 m_mutex.lock();
+            } else {
+                qCDebug(LANGUAGE) << "Background parser ignoring" << url << "because this run cancelled via JobController proxy";
             }
 
             // iterator might get invalid during the time we didn't have the lock
@@ -389,6 +392,9 @@ public:
                 if (m_bgControlledJobProxy) {
                     QMetaObject::invokeMethod(m_bgControlledJobProxy, "unregisterUrl",
                                               Qt::QueuedConnection, Q_ARG(const QUrl, url.toUrl()));
+                    if (m_killedViaProxy && m_maxParseJobs <= 0) {
+                        m_killedViaProxy = false;
+                    }
                 }
             }
 
@@ -543,6 +549,7 @@ public:
     int m_threads = 1;
 
     bool m_shuttingDown;
+    bool m_killedViaProxy = false;
 
     // A list of documents that are planned to be parsed, and their priority
     QHash<IndexedString, DocumentParsePlan> m_documents;
@@ -739,6 +746,7 @@ void BackgroundParser::addDocument(const IndexedString& url, TopDUContext::Featu
     }
     if (!d->m_bgControlledJobProxy) {
         d->m_bgControlledJobProxy = new BGParserControllerProxy(d);
+        d->m_killedViaProxy = false;
     }
     QMetaObject::invokeMethod(d->m_bgControlledJobProxy, "registerUrl",
                               Qt::QueuedConnection, Q_ARG(const QUrl, url.toUrl()));
@@ -1270,63 +1278,10 @@ void BGParserControllerProxy::start()
 
 bool BGParserControllerProxy::doKill()
 {
-    if (beingKilled) {
-        return false;
+    if (m_proxied->m_bgControlledJobProxy == this) {
+        m_proxied->m_killedViaProxy = beingKilled = true;
     }
-    if (m_proxied) {
-        beingKilled = true;
-        bool needsResume = false;
-        if (!m_urls.isEmpty()) {
-            if (!m_proxied->isSuspended()) {
-                QEventLoop loop;
-                connect(&m_proxied->m_weaver, &ThreadWeaver::Queue::suspended, &loop, &QEventLoop::quit, Qt::QueuedConnection);
-                m_proxied->suspend();
-                // wait for the weaver to be suspended so we can't cause race conditions
-                loop.exec();
-                needsResume = true;
-            }
-            QMutexLocker lock(&m_proxied->m_mutex);
-            for (const auto qurl : m_urls) {
-                const auto url = KDevelop::IndexedString(qurl);
-                auto decorator = m_proxied->m_parseJobs.value(url);
-                ParseJob *parseJob = decorator ? dynamic_cast<ParseJob*>(decorator->job()) : nullptr;
-                if (parseJob) {
-                    m_proxied->m_parseJobs.remove(parseJob->document());
-                    m_proxied->m_jobProgress.remove(parseJob);
-                }
-                if (decorator) {
-                    m_proxied->m_weaver.dequeue(ThreadWeaver::JobPointer(decorator));
-                }
-                m_proxied->m_maxParseJobs -= 1;
-                const auto parsePlanIt = m_proxied->m_documents.find(url);
-                if (parsePlanIt != m_proxied->m_documents.end()) {
-                    // Remove all mentions of this document.
-                    for (const auto& target : qAsConst(parsePlanIt->targets)) {
-                        m_proxied->m_documentsForPriority[target.priority].remove(url);
-                    }
-                    m_proxied->m_documents.erase(parsePlanIt);
-                }
-                QMutexLocker lock2(&m_proxied->m_managedMutex);
-                if (m_proxied->m_managed.contains(url)) {
-                    const auto tracker = m_proxied->m_managed[url];
-                    m_proxied->m_managed.remove(url);
-                    if (tracker) {
-                        const auto doc = tracker->document();
-                        if (m_proxied->m_managedTextDocumentUrls.contains(doc)) {
-                            m_proxied->m_managedTextDocumentUrls.remove(doc);
-                        }
-                    }
-                }
-            }
-            m_urls.clear();
-        }
-        m_proxied->m_parser->updateProgressData();
-        if (needsResume) {
-            m_proxied->resume();
-        }
-        done();
-    }
-    return true;
+    return !beingKilled;
 }
 
 void BGParserControllerProxy::done(bool unregister)

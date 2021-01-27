@@ -156,6 +156,7 @@ private:
 
     QPointer<QuickOpenWidget> m_widget;
     bool m_forceUpdate;
+    int m_newlyOpened;
     QuickOpenWidgetCreator* m_widgetCreator;
 };
 
